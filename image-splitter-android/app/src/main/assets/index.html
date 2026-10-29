@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Precision Image Splitter Studio</title>
+  <!-- Bundled locally (instead of CDN) so the Android app works offline -->
+  <link rel="stylesheet" href="tailwind.css">
+  <script src="jszip.min.js"></script>
+  <style>
+    /* Prevent default gestures & bouncing while dragging */
+    .touch-locked {
+      touch-action: none !important;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .checkerboard {
+      background-color: #1e2430;
+      background-image:
+        linear-gradient(45deg, #161b24 25%, transparent 25%),
+        linear-gradient(-45deg, #161b24 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #161b24 75%),
+        linear-gradient(-45deg, transparent 75%, #161b24 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans antialiased select-none custom-scroll">
+
+  <!-- Top App Navigation -->
+  <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between z-20">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold tracking-wide text-white flex items-center gap-2">
+          Precision Image Splitter
+          <span class="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-mono">PRO</span>
+        </h1>
+        <p class="text-[11px] text-gray-400 hidden sm:block">Horizontal, Vertical & 2×2 Custom Splitting</p>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="flex items-center space-x-2">
+      <input type="file" id="file-input" accept="image/*" class="hidden">
+      <button id="btn-browse-top" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <span>Open Image</span>
+      </button>
+      <button id="btn-demo" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-900/40 hover:bg-indigo-900/60 border border-indigo-700/50 text-indigo-300 transition">
+        Use Sample
+      </button>
+      <button id="btn-export-zip-all" disabled class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        <span>Download ZIP</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Body Layout -->
+  <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+    <!-- Interactive Left / Center Stage -->
+    <main class="flex-1 flex flex-col bg-gray-950 min-h-0 relative">
+
+      <!-- Viewport Action Toolbar -->
+      <div class="h-10 border-b border-gray-800/80 bg-gray-900/60 px-4 flex items-center justify-between text-xs text-gray-400">
+        <div class="flex items-center gap-2">
+          <span id="label-dimensions" class="font-mono text-gray-300 text-[11px]">No image selected</span>
+          <span id="label-aspect" class="text-[10px] text-gray-500 hidden sm:inline"></span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button id="btn-rot-ccw" title="Rotate Counter-Clockwise" class="p-1 hover:bg-gray-800 rounded transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+          <button id="btn-rot-cw" title="Rotate Clockwise" class="p-1 hover:bg-gray-800 rounded transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg></button>
+          <span class="w-px h-3 bg-gray-800 mx-1"></span>
+          <button id="btn-flip-h" title="Flip Horizontal" class="p-1 hover:bg-gray-800 rounded transition font-mono text-[10px] border border-gray-800 px-1.5">Flip H</button>
+          <button id="btn-flip-v" title="Flip Vertical" class="p-1 hover:bg-gray-800 rounded transition font-mono text-[10px] border border-gray-800 px-1.5">Flip V</button>
+        </div>
+      </div>
+
+      <!-- Canvas & Image Work Area -->
+      <div id="stage-viewport" class="flex-1 checkerboard relative flex items-center justify-center p-4 overflow-hidden touch-locked">
+
+        <!-- Empty Dropzone State -->
+        <div id="empty-state" class="flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-gray-800 hover:border-indigo-500/50 rounded-2xl bg-gray-900/50 backdrop-blur max-w-md transition cursor-pointer">
+          <div class="w-14 h-14 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-4">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <p class="text-sm font-semibold text-white mb-1">Click to Upload or Drag & Drop</p>
+          <p class="text-xs text-gray-400 mb-4">PNG, JPG, WEBP supported. You can also paste directly with <kbd class="px-1 py-0.5 bg-gray-800 rounded text-gray-300">Ctrl+V</kbd></p>
+          <button id="btn-browse-hero" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-lg shadow-indigo-600/30">Select from Device</button>
+        </div>
+
+        <!-- Working Image Frame with SVG Overlay -->
+        <div id="image-wrapper" class="relative hidden shadow-2xl rounded border border-gray-800 overflow-hidden touch-locked select-none" style="max-height: calc(100vh - 180px); max-width: 100%;">
+
+          <!-- Native Visible Scaled Image -->
+          <img id="main-image" class="block max-h-[70vh] max-w-full w-auto h-auto object-contain pointer-events-none select-none" alt="Splitting target" />
+
+          <!-- Interactive SVG Slicing Lines -->
+          <svg id="svg-overlay" class="absolute inset-0 w-full h-full touch-locked z-10 overflow-visible"></svg>
+
+          <!-- Floating Drag Dimension Tooltip -->
+          <div id="drag-tooltip" class="absolute hidden z-30 pointer-events-none bg-gray-900/90 text-indigo-300 border border-indigo-500/40 text-[11px] font-mono px-2 py-1 rounded shadow-xl -translate-x-1/2 -translate-y-8 backdrop-blur whitespace-nowrap">
+            500 px
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Realtime Slices Bottom Drawer -->
+      <section class="h-44 sm:h-48 border-t border-gray-800 bg-gray-900/95 flex flex-col z-10">
+        <div class="px-4 py-1.5 border-b border-gray-800/80 flex items-center justify-between text-[11px] text-gray-400">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-gray-300 uppercase tracking-wider text-[10px]">Realtime Pieces Preview</span>
+            <span id="badge-piece-count" class="bg-gray-800 px-1.5 py-0.2 text-indigo-400 rounded font-mono">0 pieces</span>
+          </div>
+          <span class="text-gray-500 text-[10px]">Click any piece to download individually</span>
+        </div>
+        <div id="slices-container" class="flex-1 flex items-center gap-4 px-4 overflow-x-auto custom-scroll py-2">
+          <!-- Dynamic slice cards inserted here -->
+          <div class="text-xs text-gray-500 italic m-auto">Upload an image to see live slices here.</div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Right Controls Sidebar -->
+    <aside class="w-full lg:w-80 xl:w-96 bg-gray-900 border-l border-gray-800 flex flex-col flex-shrink-0 text-sm overflow-y-auto custom-scroll p-4 gap-5">
+
+      <!-- Split Mode Selector -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">1. Splitting Mode</label>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+
+          <button data-mode="2-h" class="mode-btn active p-2.5 rounded-lg border border-indigo-500 bg-indigo-500/10 text-white font-medium flex items-center gap-2 transition">
+            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+            <span>2 Pieces (Horizontal)</span>
+          </button>
+
+          <button data-mode="2-v" class="mode-btn p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
+            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
+            <span>2 Pieces (Vertical)</span>
+          </button>
+
+          <button data-mode="4-grid" class="mode-btn p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
+            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
+            <span>4 Pieces (2×2 Grid)</span>
+          </button>
+
+          <button data-mode="4-h" class="mode-btn p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
+            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
+            <span>4 Pieces (Horizontal)</span>
+          </button>
+
+          <button data-mode="4-v" class="mode-btn col-span-2 p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
+            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
+            <span>4 Pieces (Vertical Columns)</span>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- Explicit Size Specifications -->
+      <div class="border-t border-gray-800 pt-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">2. Piece #1 Target Size</label>
+          <div class="flex bg-gray-800 rounded p-0.5 text-[10px]">
+            <button id="unit-px" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-medium">PX</button>
+            <button id="unit-pct" class="px-2 py-0.5 rounded text-gray-400 font-medium hover:text-white">%</button>
+          </div>
+        </div>
+
+        <!-- Value Input with Nudge buttons -->
+        <div class="space-y-3">
+
+          <!-- Primary Dimension Input -->
+          <div>
+            <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+              <span id="label-primary-dim">Target Height</span>
+              <span id="badge-primary-val" class="text-indigo-400 font-mono">0 px (50.0%)</span>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <div class="flex-1 relative">
+                <input type="number" id="input-dim-primary" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
+                <span id="unit-indicator" class="absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
+              </div>
+              <!-- Nudge buttons -->
+              <div class="flex gap-1">
+                <button data-nudge="-10" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-10</button>
+                <button data-nudge="-1" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-1</button>
+                <button data-nudge="1" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+1</button>
+                <button data-nudge="10" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+10</button>
+              </div>
+            </div>
+
+            <!-- Slider Range -->
+            <input type="range" id="slider-primary" min="1" max="100" value="50" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer mt-2.5 accent-indigo-500">
+          </div>
+
+          <!-- Secondary Dimension Input (Shown only in 2x2 Grid mode) -->
+          <div id="secondary-dim-block" class="hidden pt-2 border-t border-gray-800/60">
+            <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+              <span>Target Width</span>
+              <span id="badge-secondary-val" class="text-indigo-400 font-mono">0 px (50.0%)</span>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <div class="flex-1 relative">
+                <input type="number" id="input-dim-secondary" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
+                <span class="absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
+              </div>
+              <div class="flex gap-1">
+                <button data-nudge-sec="-10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-10</button>
+                <button data-nudge-sec="-1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-1</button>
+                <button data-nudge-sec="1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+1</button>
+                <button data-nudge-sec="10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+10</button>
+              </div>
+            </div>
+
+            <input type="range" id="slider-secondary" min="1" max="100" value="50" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer mt-2.5 accent-indigo-500">
+          </div>
+
+          <!-- Ratio Presets -->
+          <div class="pt-1">
+            <span class="text-[10px] text-gray-500 block mb-1.5">Quick Presets</span>
+            <div class="flex flex-wrap gap-1.5 text-xs">
+              <button data-preset="0.5" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">1:1 (50/50)</button>
+              <button data-preset="0.3333" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">1:2 (33%)</button>
+              <button data-preset="0.25" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">1:3 (25%)</button>
+              <button data-preset="0.618" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">&Phi; Golden (61.8%)</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Export Settings -->
+      <div class="border-t border-gray-800 pt-4 mt-auto">
+        <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">3. Output Settings</label>
+
+        <div class="space-y-3">
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer bg-gray-950 p-2 rounded border border-gray-800">
+              <input type="radio" name="format" value="image/png" checked class="text-indigo-600 focus:ring-0">
+              <span>PNG</span>
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer bg-gray-950 p-2 rounded border border-gray-800">
+              <input type="radio" name="format" value="image/jpeg" class="text-indigo-600 focus:ring-0">
+              <span>JPG</span>
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer bg-gray-950 p-2 rounded border border-gray-800">
+              <input type="radio" name="format" value="image/webp" class="text-indigo-600 focus:ring-0">
+              <span>WEBP</span>
+            </label>
+          </div>
+
+          <div id="jpg-quality-box" class="hidden">
+            <div class="flex justify-between text-xs text-gray-400 mb-1">
+              <span>Compression Quality</span>
+              <span id="quality-val" class="font-mono text-white">90%</span>
+            </div>
+            <input type="range" id="input-quality" min="30" max="100" value="90" class="w-full h-1 bg-gray-800 rounded appearance-none accent-indigo-500">
+          </div>
+
+          <div class="pt-2">
+            <button id="btn-export-zip-sidebar" disabled class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              <span>Export Slices to ZIP</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- Offscreen Processing Canvas -->
+  <canvas id="offscreen-canvas" class="hidden"></canvas>
+
+  <script>
+    (function () {
+      // Core State
+      const state = {
+        image: null,
+        rawWidth: 0,
+        rawHeight: 0,
+        rotation: 0,
+        flipH: false,
+        flipV: false,
+        mode: '2-h', // '2-h', '2-v', '4-grid', '4-h', '4-v'
+        unit: 'px', // 'px' or 'pct'
+        primaryRatio: 0.5,    // 0 to 1
+        secondaryRatio: 0.5,  // for 2x2 grid width
+        format: 'image/png',
+        quality: 0.9,
+        isDragging: false,
+        activeGuide: null // 'h', 'v', 'h1', 'h2', 'h3', etc.
+      };
+
+      // Elements
+      const fileInput = document.getElementById('file-input');
+      const btnBrowseTop = document.getElementById('btn-browse-top');
+      const btnBrowseHero = document.getElementById('btn-browse-hero');
+      const emptyState = document.getElementById('empty-state');
+      const imageWrapper = document.getElementById('image-wrapper');
+      const mainImage = document.getElementById('main-image');
+      const svgOverlay = document.getElementById('svg-overlay');
+      const stageViewport = document.getElementById('stage-viewport');
+      const slicesContainer = document.getElementById('slices-container');
+      const badgePieceCount = document.getElementById('badge-piece-count');
+      const labelDimensions = document.getElementById('label-dimensions');
+      const labelAspect = document.getElementById('label-aspect');
+      const dragTooltip = document.getElementById('drag-tooltip');
+      const offscreenCanvas = document.getElementById('offscreen-canvas');
+
+      const inputDimPrimary = document.getElementById('input-dim-primary');
+      const sliderPrimary = document.getElementById('slider-primary');
+      const badgePrimaryVal = document.getElementById('badge-primary-val');
+      const labelPrimaryDim = document.getElementById('label-primary-dim');
+
+      const secondaryDimBlock = document.getElementById('secondary-dim-block');
+      const inputDimSecondary = document.getElementById('input-dim-secondary');
+      const sliderSecondary = document.getElementById('slider-secondary');
+      const badgeSecondaryVal = document.getElementById('badge-secondary-val');
+
+      const btnExportZipTop = document.getElementById('btn-export-zip-all');
+      const btnExportZipSidebar = document.getElementById('btn-export-zip-sidebar');
+      const unitPx = document.getElementById('unit-px');
+      const unitPct = document.getElementById('unit-pct');
+      const unitIndicator = document.getElementById('unit-indicator');
+
+      // Save a file: inside the Android app, hand it to the native bridge
+      // (WebView ignores <a download>); in a normal browser, use a link.
+      function saveFile(name, mime, base64) {
+        if (window.AndroidBridge) {
+          window.AndroidBridge.saveBase64(name, mime, base64);
+          return;
+        }
+        const a = document.createElement('a');
+        a.href = `data:${mime};base64,${base64}`;
+        a.download = name;
+        a.click();
+      }
+
+      // Setup Listeners
+      btnBrowseTop.onclick = () => { fileInput.value = ''; fileInput.click(); };
+      btnBrowseHero.onclick = (e) => { e.stopPropagation(); fileInput.value = ''; fileInput.click(); };
+      emptyState.onclick = () => { fileInput.value = ''; fileInput.click(); };
+      fileInput.onchange = (e) => handleFiles(e.target.files);
+
+      // Clipboard Paste Support
+      window.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let item of items) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            handleFiles([item.getAsFile()]);
+            break;
+          }
+        }
+      });
+
+      // Drag and Drop files
+      stageViewport.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+      stageViewport.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer && e.dataTransfer.files.length) {
+          handleFiles(e.dataTransfer.files);
+        }
+      });
+
+      // Sample Generator
+      document.getElementById('btn-demo').onclick = () => {
+        const c = document.createElement('canvas');
+        c.width = 1200;
+        c.height = 800;
+        const ctx = c.getContext('2d');
+        const grad = ctx.createLinearGradient(0, 0, 1200, 800);
+        grad.addColorStop(0, '#312e81');
+        grad.addColorStop(0.5, '#4f46e5');
+        grad.addColorStop(1, '#06b6d4');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 1200, 800);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        for (let i = 0; i < 20; i++) {
+          ctx.beginPath();
+          ctx.arc(Math.random() * 1200, Math.random() * 800, 50 + Math.random() * 120, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 52px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('SAMPLE IMAGE FOR SPLITTING', 600, 390);
+        ctx.font = '24px sans-serif';
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillText('1200 × 800 px — High Resolution Test Canvas', 600, 440);
+
+        loadSource(c.toDataURL());
+      };
+
+      function handleFiles(files) {
+        if (!files || !files[0]) return;
+        const file = files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => loadSource(e.target.result);
+        reader.readAsDataURL(file);
+      }
+
+      function loadSource(src) {
+        const img = new Image();
+        img.onload = () => {
+          state.image = img;
+          state.rotation = 0;
+          state.flipH = false;
+          state.flipV = false;
+          applyOrientedSource();
+        };
+        img.src = src;
+      }
+
+      function applyOrientedSource() {
+        if (!state.image) return;
+
+        // Bake transformations (rotation/flips) into oriented source
+        const rad = (state.rotation * Math.PI) / 180;
+        const isOrthogonal = Math.abs(state.rotation % 180) === 90;
+        const targetW = isOrthogonal ? state.image.naturalHeight : state.image.naturalWidth;
+        const targetH = isOrthogonal ? state.image.naturalWidth : state.image.naturalHeight;
+
+        offscreenCanvas.width = targetW;
+        offscreenCanvas.height = targetH;
+        const ctx = offscreenCanvas.getContext('2d');
+        ctx.clearRect(0, 0, targetW, targetH);
+        ctx.save();
+        ctx.translate(targetW / 2, targetH / 2);
+        ctx.rotate(rad);
+        ctx.scale(state.flipH ? -1 : 1, state.flipV ? -1 : 1);
+        ctx.drawImage(state.image, -state.image.naturalWidth / 2, -state.image.naturalHeight / 2);
+        ctx.restore();
+
+        state.rawWidth = targetW;
+        state.rawHeight = targetH;
+
+        mainImage.src = offscreenCanvas.toDataURL();
+        mainImage.onload = () => {
+          emptyState.classList.add('hidden');
+          imageWrapper.classList.remove('hidden');
+          btnExportZipTop.disabled = false;
+          btnExportZipSidebar.disabled = false;
+
+          labelDimensions.textContent = `${targetW} × ${targetH} px`;
+          const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+          const divisor = gcd(targetW, targetH);
+          labelAspect.textContent = `(${targetW / divisor}:${targetH / divisor})`;
+
+          syncInputs();
+          renderGuides();
+          generateSlices();
+        };
+      }
+
+      // Orientation Buttons
+      document.getElementById('btn-rot-cw').onclick = () => { state.rotation = (state.rotation + 90) % 360; applyOrientedSource(); };
+      document.getElementById('btn-rot-ccw').onclick = () => { state.rotation = (state.rotation - 90 + 360) % 360; applyOrientedSource(); };
+      document.getElementById('btn-flip-h').onclick = () => { state.flipH = !state.flipH; applyOrientedSource(); };
+      document.getElementById('btn-flip-v').onclick = () => { state.flipV = !state.flipV; applyOrientedSource(); };
+
+      // Mode Switcher
+      document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.mode-btn').forEach(b => {
+            b.classList.remove('active', 'border-indigo-500', 'bg-indigo-500/10', 'text-white');
+            b.classList.add('border-gray-800', 'bg-gray-800/60', 'text-gray-300');
+            b.querySelector('span:first-child').className = 'w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500';
+          });
+          btn.classList.add('active', 'border-indigo-500', 'bg-indigo-500/10', 'text-white');
+          btn.classList.remove('border-gray-800', 'bg-gray-800/60', 'text-gray-300');
+          btn.querySelector('span:first-child').className = 'w-2.5 h-2.5 rounded-full bg-indigo-500';
+
+          state.mode = btn.getAttribute('data-mode');
+          if (state.mode === '4-grid') {
+            secondaryDimBlock.classList.remove('hidden');
+          } else {
+            secondaryDimBlock.classList.add('hidden');
+          }
+          syncInputs();
+          renderGuides();
+          generateSlices();
+        };
+      });
+
+      // Unit Switcher
+      unitPx.onclick = () => {
+        state.unit = 'px';
+        unitPx.className = 'px-2 py-0.5 rounded bg-indigo-600 text-white font-medium';
+        unitPct.className = 'px-2 py-0.5 rounded text-gray-400 font-medium hover:text-white';
+        unitIndicator.textContent = 'px';
+        syncInputs();
+      };
+      unitPct.onclick = () => {
+        state.unit = 'pct';
+        unitPct.className = 'px-2 py-0.5 rounded bg-indigo-600 text-white font-medium';
+        unitPx.className = 'px-2 py-0.5 rounded text-gray-400 font-medium hover:text-white';
+        unitIndicator.textContent = '%';
+        syncInputs();
+      };
+
+      // Presets
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.onclick = () => {
+          const ratio = parseFloat(btn.getAttribute('data-preset'));
+          state.primaryRatio = ratio;
+          state.secondaryRatio = ratio;
+          syncInputs();
+          renderGuides();
+          generateSlices();
+        };
+      });
+
+      // Synchronize Input Fields
+      function syncInputs() {
+        const isHorizontal = state.mode === '2-h' || state.mode === '4-h' || state.mode === '4-grid';
+        labelPrimaryDim.textContent = isHorizontal ? 'Piece 1 Target Height' : 'Piece 1 Target Width';
+
+        const totalDim = isHorizontal ? state.rawHeight : state.rawWidth;
+        const currentPx = Math.round(state.primaryRatio * totalDim);
+        const currentPct = (state.primaryRatio * 100).toFixed(1);
+
+        badgePrimaryVal.textContent = `${currentPx} px (${currentPct}%)`;
+
+        if (state.unit === 'px') {
+          inputDimPrimary.value = currentPx;
+          inputDimPrimary.max = totalDim - 1;
+        } else {
+          inputDimPrimary.value = currentPct;
+          inputDimPrimary.max = 99.9;
+        }
+        sliderPrimary.value = (state.primaryRatio * 100);
+
+        if (state.mode === '4-grid') {
+          const secDim = state.rawWidth;
+          const secPx = Math.round(state.secondaryRatio * secDim);
+          const secPct = (state.secondaryRatio * 100).toFixed(1);
+          badgeSecondaryVal.textContent = `${secPx} px (${secPct}%)`;
+
+          if (state.unit === 'px') {
+            inputDimSecondary.value = secPx;
+            inputDimSecondary.max = secDim - 1;
+          } else {
+            inputDimSecondary.value = secPct;
+            inputDimSecondary.max = 99.9;
+          }
+          sliderSecondary.value = (state.secondaryRatio * 100);
+        }
+      }
+
+      // Input Event Listeners
+      inputDimPrimary.addEventListener('input', () => {
+        const val = parseFloat(inputDimPrimary.value) || 0;
+        const isHorizontal = state.mode === '2-h' || state.mode === '4-h' || state.mode === '4-grid';
+        const total = isHorizontal ? state.rawHeight : state.rawWidth;
+
+        if (state.unit === 'px') {
+          state.primaryRatio = Math.max(0.01, Math.min(0.99, val / total));
+        } else {
+          state.primaryRatio = Math.max(0.01, Math.min(0.99, val / 100));
+        }
+        badgePrimaryVal.textContent = `${Math.round(state.primaryRatio * total)} px (${(state.primaryRatio * 100).toFixed(1)}%)`;
+        sliderPrimary.value = state.primaryRatio * 100;
+        renderGuides();
+        generateSlices();
+      });
+
+      sliderPrimary.addEventListener('input', () => {
+        state.primaryRatio = parseFloat(sliderPrimary.value) / 100;
+        syncInputs();
+        renderGuides();
+        generateSlices();
+      });
+
+      inputDimSecondary.addEventListener('input', () => {
+        const val = parseFloat(inputDimSecondary.value) || 0;
+        const total = state.rawWidth;
+        if (state.unit === 'px') {
+          state.secondaryRatio = Math.max(0.01, Math.min(0.99, val / total));
+        } else {
+          state.secondaryRatio = Math.max(0.01, Math.min(0.99, val / 100));
+        }
+        badgeSecondaryVal.textContent = `${Math.round(state.secondaryRatio * total)} px (${(state.secondaryRatio * 100).toFixed(1)}%)`;
+        sliderSecondary.value = state.secondaryRatio * 100;
+        renderGuides();
+        generateSlices();
+      });
+
+      sliderSecondary.addEventListener('input', () => {
+        state.secondaryRatio = parseFloat(sliderSecondary.value) / 100;
+        syncInputs();
+        renderGuides();
+        generateSlices();
+      });
+
+      // Nudging
+      document.querySelectorAll('.nudge-btn').forEach(btn => {
+        btn.onclick = () => {
+          const step = parseInt(btn.getAttribute('data-nudge'));
+          const isHorizontal = state.mode === '2-h' || state.mode === '4-h' || state.mode === '4-grid';
+          const total = isHorizontal ? state.rawHeight : state.rawWidth;
+          let currentPx = Math.round(state.primaryRatio * total);
+          currentPx = Math.max(1, Math.min(total - 1, currentPx + step));
+          state.primaryRatio = currentPx / total;
+          syncInputs();
+          renderGuides();
+          generateSlices();
+        };
+      });
+
+      document.querySelectorAll('.nudge-sec-btn').forEach(btn => {
+        btn.onclick = () => {
+          const step = parseInt(btn.getAttribute('data-nudge-sec'));
+          const total = state.rawWidth;
+          let currentPx = Math.round(state.secondaryRatio * total);
+          currentPx = Math.max(1, Math.min(total - 1, currentPx + step));
+          state.secondaryRatio = currentPx / total;
+          syncInputs();
+          renderGuides();
+          generateSlices();
+        };
+      });
+
+      // Format & Quality
+      document.querySelectorAll('input[name="format"]').forEach(radio => {
+        radio.onchange = () => {
+          state.format = radio.value;
+          document.getElementById('jpg-quality-box').classList.toggle('hidden', state.format === 'image/png');
+          generateSlices();
+        };
+      });
+
+      document.getElementById('input-quality').oninput = (e) => {
+        state.quality = parseInt(e.target.value) / 100;
+        document.getElementById('quality-val').textContent = `${e.target.value}%`;
+        generateSlices();
+      };
+
+      // Pointer Event Locked Guide Renderer
+      function renderGuides() {
+        if (!state.image) return;
+        svgOverlay.innerHTML = '';
+
+        const rect = mainImage.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        svgOverlay.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+
+        const createGuide = (id, type, posRatio) => {
+          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          g.setAttribute('class', 'guide-group cursor-' + (type === 'h' ? 'row-resize' : 'col-resize'));
+          g.setAttribute('data-id', id);
+          g.setAttribute('data-type', type);
+
+          const isH = type === 'h';
+          const pos = isH ? posRatio * rect.height : posRatio * rect.width;
+
+          // 32px Wide Transparent Grab Box
+          const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          hit.setAttribute('x1', isH ? '0' : pos);
+          hit.setAttribute('y1', isH ? pos : '0');
+          hit.setAttribute('x2', isH ? rect.width : pos);
+          hit.setAttribute('y2', isH ? pos : rect.height);
+          hit.setAttribute('stroke', 'transparent');
+          hit.setAttribute('stroke-width', '32');
+          hit.setAttribute('class', 'touch-locked');
+
+          // Visible dashed neon cutting line
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', isH ? '0' : pos);
+          line.setAttribute('y1', isH ? pos : '0');
+          line.setAttribute('x2', isH ? rect.width : pos);
+          line.setAttribute('y2', isH ? pos : rect.height);
+          line.setAttribute('stroke', '#6366f1');
+          line.setAttribute('stroke-width', '2');
+          line.setAttribute('stroke-dasharray', '5 4');
+
+          // Center Handle Pill
+          const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          handle.setAttribute('cx', isH ? rect.width / 2 : pos);
+          handle.setAttribute('cy', isH ? pos : rect.height / 2);
+          handle.setAttribute('r', '7');
+          handle.setAttribute('fill', '#4f46e5');
+          handle.setAttribute('stroke', '#ffffff');
+          handle.setAttribute('stroke-width', '2');
+
+          g.appendChild(hit);
+          g.appendChild(line);
+          g.appendChild(handle);
+          svgOverlay.appendChild(g);
+
+          // Pointer capture for completely smooth touch dragging without screen scrolling
+          g.onpointerdown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            g.setPointerCapture(e.pointerId);
+            state.isDragging = true;
+            state.activeGuide = id;
+
+            dragTooltip.classList.remove('hidden');
+            updateTooltip(e, type, posRatio);
+
+            g.onpointermove = (pe) => {
+              if (!state.isDragging) return;
+              pe.preventDefault();
+              pe.stopPropagation();
+
+              const r = mainImage.getBoundingClientRect();
+              let ratio;
+              if (type === 'h') {
+                ratio = Math.max(0.02, Math.min(0.98, (pe.clientY - r.top) / r.height));
+                state.primaryRatio = ratio;
+              } else {
+                if (state.mode === '4-grid') {
+                  ratio = Math.max(0.02, Math.min(0.98, (pe.clientX - r.left) / r.width));
+                  state.secondaryRatio = ratio;
+                } else {
+                  ratio = Math.max(0.02, Math.min(0.98, (pe.clientX - r.left) / r.width));
+                  state.primaryRatio = ratio;
+                }
+              }
+
+              syncInputs();
+              renderGuides();
+              updateTooltip(pe, type, ratio);
+            };
+
+            const endDrag = (pe) => {
+              pe.preventDefault();
+              pe.stopPropagation();
+              state.isDragging = false;
+              state.activeGuide = null;
+              dragTooltip.classList.add('hidden');
+              g.onpointermove = null;
+              g.onpointerup = null;
+              g.onpointercancel = null;
+              try { g.releasePointerCapture(pe.pointerId); } catch(err){}
+              generateSlices();
+            };
+
+            g.onpointerup = endDrag;
+            g.onpointercancel = endDrag;
+          };
+        };
+
+        // Render appropriate guide lines based on mode
+        if (state.mode === '2-h') {
+          createGuide('g-h', 'h', state.primaryRatio);
+        } else if (state.mode === '2-v') {
+          createGuide('g-v', 'v', state.primaryRatio);
+        } else if (state.mode === '4-grid') {
+          createGuide('g-h', 'h', state.primaryRatio);
+          createGuide('g-v', 'v', state.secondaryRatio);
+        } else if (state.mode === '4-h') {
+          createGuide('g-h1', 'h', state.primaryRatio * 0.5);
+          createGuide('g-h2', 'h', state.primaryRatio);
+          createGuide('g-h3', 'h', state.primaryRatio + (1 - state.primaryRatio) * 0.5);
+        } else if (state.mode === '4-v') {
+          createGuide('g-v1', 'v', state.primaryRatio * 0.5);
+          createGuide('g-v2', 'v', state.primaryRatio);
+          createGuide('g-v3', 'v', state.primaryRatio + (1 - state.primaryRatio) * 0.5);
+        }
+      }
+
+      function updateTooltip(e, type, ratio) {
+        const wrapRect = imageWrapper.getBoundingClientRect();
+        const x = e.clientX - wrapRect.left;
+        const y = e.clientY - wrapRect.top;
+        dragTooltip.style.left = `${x}px`;
+        dragTooltip.style.top = `${y}px`;
+
+        const isH = type === 'h';
+        const total = isH ? state.rawHeight : state.rawWidth;
+        const px = Math.round(ratio * total);
+        dragTooltip.textContent = `${px} px (${(ratio * 100).toFixed(1)}%)`;
+      }
+
+      // Generate Native Resolution Output Pieces
+      window.renderedSlices = [];
+
+      function generateSlices() {
+        if (!state.image) return;
+
+        const W = state.rawWidth;
+        const H = state.rawHeight;
+        const slices = [];
+
+        if (state.mode === '2-h') {
+          const cutY = Math.round(state.primaryRatio * H);
+          slices.push({ x: 0, y: 0, w: W, h: cutY, name: 'Part_1_Top' });
+          slices.push({ x: 0, y: cutY, w: W, h: H - cutY, name: 'Part_2_Bottom' });
+        } else if (state.mode === '2-v') {
+          const cutX = Math.round(state.primaryRatio * W);
+          slices.push({ x: 0, y: 0, w: cutX, h: H, name: 'Part_1_Left' });
+          slices.push({ x: cutX, y: 0, w: W - cutX, h: H, name: 'Part_2_Right' });
+        } else if (state.mode === '4-grid') {
+          const cutY = Math.round(state.primaryRatio * H);
+          const cutX = Math.round(state.secondaryRatio * W);
+          slices.push({ x: 0, y: 0, w: cutX, h: cutY, name: 'Part_1_TopLeft' });
+          slices.push({ x: cutX, y: 0, w: W - cutX, h: cutY, name: 'Part_2_TopRight' });
+          slices.push({ x: 0, y: cutY, w: cutX, h: H - cutY, name: 'Part_3_BottomLeft' });
+          slices.push({ x: cutX, y: cutY, w: W - cutX, h: H - cutY, name: 'Part_4_BottomRight' });
+        } else if (state.mode === '4-h') {
+          const y1 = Math.round(state.primaryRatio * 0.5 * H);
+          const y2 = Math.round(state.primaryRatio * H);
+          const y3 = Math.round((state.primaryRatio + (1 - state.primaryRatio) * 0.5) * H);
+          slices.push({ x: 0, y: 0, w: W, h: y1, name: 'Part_1' });
+          slices.push({ x: 0, y: y1, w: W, h: y2 - y1, name: 'Part_2' });
+          slices.push({ x: 0, y: y2, w: W, h: y3 - y2, name: 'Part_3' });
+          slices.push({ x: 0, y: y3, w: W, h: H - y3, name: 'Part_4' });
+        } else if (state.mode === '4-v') {
+          const x1 = Math.round(state.primaryRatio * 0.5 * W);
+          const x2 = Math.round(state.primaryRatio * W);
+          const x3 = Math.round((state.primaryRatio + (1 - state.primaryRatio) * 0.5) * W);
+          slices.push({ x: 0, y: 0, w: x1, h: H, name: 'Part_1' });
+          slices.push({ x: x1, y: 0, w: x2 - x1, h: H, name: 'Part_2' });
+          slices.push({ x: x2, y: 0, w: x3 - x2, h: H, name: 'Part_3' });
+          slices.push({ x: x3, y: 0, w: W - x3, h: H, name: 'Part_4' });
+        }
+
+        slicesContainer.innerHTML = '';
+        window.renderedSlices = [];
+        badgePieceCount.textContent = `${slices.length} pieces`;
+
+        slices.forEach((s, idx) => {
+          if (s.w <= 0 || s.h <= 0) return;
+
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = s.w;
+          sliceCanvas.height = s.h;
+          const sCtx = sliceCanvas.getContext('2d');
+          sCtx.drawImage(offscreenCanvas, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
+
+          const dataUrl = sliceCanvas.toDataURL(state.format, state.quality);
+          const slice = {
+            name: `${s.name}_${s.w}x${s.h}.${state.format === 'image/png' ? 'png' : state.format === 'image/webp' ? 'webp' : 'jpg'}`,
+            dataUrl: dataUrl,
+            width: s.w,
+            height: s.h
+          };
+          window.renderedSlices.push(slice);
+
+          // Render card
+          const card = document.createElement('div');
+          card.className = 'flex-shrink-0 bg-gray-950 border border-gray-800 hover:border-indigo-500 rounded-lg p-2 flex flex-col items-center gap-1.5 transition shadow-lg cursor-pointer group';
+          card.title = 'Click to download this piece';
+
+          const img = document.createElement('img');
+          img.src = dataUrl;
+          img.className = 'h-24 sm:h-28 w-auto object-contain rounded bg-gray-900 border border-gray-800/80';
+
+          const footer = document.createElement('div');
+          footer.className = 'flex items-center justify-between w-full px-1 text-[10px] text-gray-400 font-mono';
+          footer.innerHTML = `<span>#${idx + 1}</span> <span>${s.w}×${s.h}</span>`;
+
+          card.appendChild(img);
+          card.appendChild(footer);
+
+          card.onclick = () => {
+            const mime = dataUrl.substring(5, dataUrl.indexOf(';'));
+            saveFile(slice.name, mime, dataUrl.split(',')[1]);
+          };
+
+          slicesContainer.appendChild(card);
+        });
+      }
+
+      // Export All as ZIP
+      const exportZip = async () => {
+        if (!window.renderedSlices || !window.renderedSlices.length) return;
+        const zip = new JSZip();
+
+        let manifest = `IMAGE SPLIT SUMMARY\n====================\n`;
+        manifest += `Original Image: ${state.rawWidth} x ${state.rawHeight} px\n`;
+        manifest += `Total Slices: ${window.renderedSlices.length}\n`;
+        manifest += `Format: ${state.format}\n\n`;
+
+        window.renderedSlices.forEach((slice, i) => {
+          const base64Data = slice.dataUrl.split(',')[1];
+          zip.file(slice.name, base64Data, { base64: true });
+          manifest += `[${i + 1}] ${slice.name} (${slice.width}x${slice.height}px)\n`;
+        });
+
+        zip.file("split_dimensions_info.txt", manifest);
+
+        const btnText = btnExportZipSidebar.querySelector('span');
+        const originalText = btnText.textContent;
+        btnText.textContent = "Compressing ZIP...";
+
+        try {
+          const content = await zip.generateAsync({ type: "base64" });
+          saveFile(`split_images_${Date.now()}.zip`, 'application/zip', content);
+        } finally {
+          btnText.textContent = originalText;
+        }
+      };
+
+      btnExportZipSidebar.onclick = exportZip;
+      btnExportZipTop.onclick = exportZip;
+
+      // Handle window resizing
+      window.addEventListener('resize', () => {
+        if (state.image) {
+          renderGuides();
+        }
+      });
+
+    })();
+  </script>
+</body>
+</html>
