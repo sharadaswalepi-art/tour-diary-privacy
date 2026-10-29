@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Precision Image Splitter Studio</title>
+  <!-- Bundled locally (instead of CDN) so the Android app works offline -->
+  <link rel="stylesheet" href="tailwind.css">
+  <style>
+    /* Prevent default gestures & bouncing while dragging */
+    .touch-locked {
+      touch-action: none !important;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .checkerboard {
+      background-color: #1e2430;
+      background-image:
+        linear-gradient(45deg, #161b24 25%, transparent 25%),
+        linear-gradient(-45deg, #161b24 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #161b24 75%),
+        linear-gradient(-45deg, transparent 75%, #161b24 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 3px;
+    }
+    /* Large, touch-friendly range sliders */
+    .range {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 32px;
+      background: transparent;
+      touch-action: pan-y;
+    }
+    .range::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: #1f2937;
+    }
+    .range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      margin-top: -9px;
+      border-radius: 9999px;
+      background: #6366f1;
+      border: 3px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    }
+    .guide.dragging line:nth-child(3) {
+      stroke: #c7d2fe;
+    }
+    .guide.dragging circle {
+      r: 12px;
+    }
+  </style>
+</head>
+<body class="h-full bg-gray-950 text-gray-100 flex flex-col overflow-hidden font-sans antialiased select-none">
+
+  <!-- Top App Navigation -->
+  <header class="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-3 py-2 flex items-center justify-between gap-2 z-20">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-8 h-8 flex-shrink-0 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </div>
+      <h1 class="text-sm font-bold tracking-wide text-white flex items-center gap-2 truncate">
+        Image Studio
+        <span class="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-mono">PRO</span>
+      </h1>
+    </div>
+
+    <!-- Tool Tabs -->
+    <div class="flex bg-gray-800 rounded-lg p-0.5 text-xs gap-0.5">
+      <button id="tab-split" class="px-4 py-1.5 rounded-md border font-semibold transition">Split</button>
+      <button id="tab-join" class="px-4 py-1.5 rounded-md border font-semibold transition">Join</button>
+    </div>
+  </header>
+
+  <!-- ===================== SPLIT VIEW ===================== -->
+  <div id="view-split" class="flex-1 min-h-0 flex flex-col lg:flex-row">
+
+    <main class="flex-1 min-h-0 flex flex-col bg-gray-950">
+
+      <!-- Viewport Action Toolbar -->
+      <div class="h-11 flex-shrink-0 border-b border-gray-800/80 bg-gray-900/60 px-3 flex items-center justify-between gap-2 text-xs text-gray-400">
+        <div class="flex items-center gap-1.5">
+          <button id="btn-open" class="px-2.5 py-1.5 font-semibold rounded-lg bg-gray-800 border border-gray-700 text-gray-200 flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Open</span>
+          </button>
+          <button id="btn-demo" class="px-2.5 py-1.5 font-semibold rounded-lg bg-indigo-900/40 border border-indigo-700/50 text-indigo-300">Sample</button>
+          <span id="label-dimensions" class="font-mono text-gray-400 text-[10px] ml-1 hidden sm:inline"></span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button id="btn-rot-ccw" title="Rotate Counter-Clockwise" class="p-1.5 rounded border border-gray-800"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M4.6 15a8 8 0 101.9-8.3L4 9"></path></svg></button>
+          <button id="btn-rot-cw" title="Rotate Clockwise" class="p-1.5 rounded border border-gray-800"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 4v5h-5M19.4 15a8 8 0 11-1.9-8.3L20 9"></path></svg></button>
+          <button id="btn-flip-h" title="Flip Horizontal" class="p-1.5 rounded font-mono text-[10px] border border-gray-800 px-2">Flip H</button>
+          <button id="btn-flip-v" title="Flip Vertical" class="p-1.5 rounded font-mono text-[10px] border border-gray-800 px-2">Flip V</button>
+        </div>
+      </div>
+
+      <!-- Canvas & Image Work Area -->
+      <div id="stage" class="flex-1 min-h-0 checkerboard relative flex items-center justify-center overflow-hidden touch-locked">
+
+        <!-- Empty State -->
+        <div id="split-empty" class="flex flex-col items-center justify-center text-center p-6 m-4 border-2 border-dashed border-gray-800 rounded-2xl bg-gray-900/50 max-w-md cursor-pointer">
+          <div class="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <p class="text-sm font-semibold text-white mb-1">Tap to choose an image</p>
+          <p class="text-xs text-gray-400">PNG, JPG, WEBP supported</p>
+        </div>
+
+        <!-- Working Image Frame with SVG Overlay -->
+        <div id="image-wrapper" class="relative hidden shadow-2xl ring-1 ring-gray-800">
+          <canvas id="main-canvas" class="block"></canvas>
+          <svg id="svg-overlay" class="absolute inset-0 w-full h-full touch-locked z-10 overflow-visible"></svg>
+          <div id="drag-tooltip" class="absolute hidden z-30 pointer-events-none bg-gray-900/90 text-indigo-300 border border-indigo-500/40 text-[11px] font-mono px-2 py-1 rounded shadow-xl -translate-x-1/2 -translate-y-full -mt-4 whitespace-nowrap"></div>
+        </div>
+      </div>
+
+      <!-- Realtime Pieces Strip -->
+      <section class="h-28 flex-shrink-0 border-t border-gray-800 bg-gray-900/95 flex flex-col">
+        <div class="px-3 py-1 border-b border-gray-800/80 flex items-center justify-between text-[11px] text-gray-400">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-gray-300 uppercase tracking-wider text-[10px]">Pieces</span>
+            <span id="badge-piece-count" class="bg-gray-800 px-1.5 text-indigo-400 rounded font-mono">0</span>
+          </div>
+          <span class="text-gray-500 text-[10px]">Tap a piece to save it</span>
+        </div>
+        <div id="slices-container" class="flex-1 flex items-center gap-3 px-3 overflow-x-auto custom-scroll">
+          <div class="text-xs text-gray-500 italic m-auto">Open an image to see the pieces here.</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Controls -->
+    <aside class="h-[40%] lg:h-auto flex-shrink-0 lg:w-80 xl:w-96 bg-gray-900 border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col text-sm">
+      <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-4">
+
+        <!-- Split Mode Selector -->
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">1. Splitting Mode</label>
+          <div class="grid grid-cols-5 gap-1.5">
+            <button data-value="2-h" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">2<br>Rows</button>
+            <button data-value="2-v" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">2<br>Columns</button>
+            <button data-value="4-grid" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">2×2<br>Grid</button>
+            <button data-value="4-h" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">4<br>Rows</button>
+            <button data-value="4-v" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">4<br>Columns</button>
+          </div>
+        </div>
+
+        <!-- Explicit Size Specifications -->
+        <div class="border-t border-gray-800 pt-3">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[11px] font-semibold text-gray-300 uppercase tracking-wider">2. Piece Size</label>
+            <div class="flex bg-gray-800 rounded p-0.5 text-[10px] gap-0.5">
+              <button data-value="px" class="unit-btn px-2.5 py-0.5 rounded border font-medium">PX</button>
+              <button data-value="pct" class="unit-btn px-2.5 py-0.5 rounded border font-medium">%</button>
+            </div>
+          </div>
+
+          <!-- Primary Dimension -->
+          <div id="primary-block">
+            <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+              <span id="label-primary-dim">Piece 1 height</span>
+              <span id="badge-primary-val" class="text-indigo-400 font-mono"></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="flex-1 relative">
+                <input type="number" id="input-dim-primary" inputmode="decimal" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
+                <span class="unit-indicator absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
+              </div>
+              <div class="flex gap-1">
+                <button data-nudge="-10" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-10</button>
+                <button data-nudge="-1" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-1</button>
+                <button data-nudge="1" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+1</button>
+                <button data-nudge="10" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+10</button>
+              </div>
+            </div>
+            <input type="range" id="slider-primary" min="1" max="100" value="50" step="1" class="range mt-1">
+          </div>
+
+          <!-- Secondary Dimension (2x2 Grid only) -->
+          <div id="secondary-block" class="hidden pt-2 border-t border-gray-800/60">
+            <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+              <span>Piece 1 width</span>
+              <span id="badge-secondary-val" class="text-indigo-400 font-mono"></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="flex-1 relative">
+                <input type="number" id="input-dim-secondary" inputmode="decimal" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
+                <span class="unit-indicator absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
+              </div>
+              <div class="flex gap-1">
+                <button data-nudge="-10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-10</button>
+                <button data-nudge="-1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-1</button>
+                <button data-nudge="1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+1</button>
+                <button data-nudge="10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+10</button>
+              </div>
+            </div>
+            <input type="range" id="slider-secondary" min="1" max="100" value="50" step="1" class="range mt-1">
+          </div>
+
+          <p id="hint-4piece" class="hidden text-[10px] text-gray-500 mt-1">Sets piece 1; the rest is shared evenly. Drag any line on the image to adjust it on its own.</p>
+
+          <!-- Ratio Presets -->
+          <div class="pt-2">
+            <span class="text-[10px] text-gray-500 block mb-1.5">Quick Presets</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button data-preset="0.5" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">1:1 (50%)</button>
+              <button data-preset="0.3333" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">1:2 (33%)</button>
+              <button data-preset="0.25" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">1:3 (25%)</button>
+              <button data-preset="0.618" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">&Phi; Golden (61.8%)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Output Settings -->
+        <div class="border-t border-gray-800 pt-3">
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">3. Output Format</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="image/png" class="split-format-btn py-2 rounded-lg border text-xs font-medium">PNG</button>
+            <button data-value="image/jpeg" class="split-format-btn py-2 rounded-lg border text-xs font-medium">JPG</button>
+            <button data-value="image/webp" class="split-format-btn py-2 rounded-lg border text-xs font-medium">WEBP</button>
+          </div>
+          <div id="split-quality-box" class="hidden mt-2">
+            <div class="flex justify-between text-xs text-gray-400">
+              <span>Quality</span>
+              <span id="split-quality-val" class="font-mono text-white">90%</span>
+            </div>
+            <input type="range" id="split-quality" min="30" max="100" value="90" class="range">
+          </div>
+        </div>
+      </div>
+
+      <!-- Action bar (always visible) -->
+      <div class="flex-shrink-0 p-3 border-t border-gray-800 bg-gray-900">
+        <button id="btn-save-all" disabled class="w-full py-3 bg-indigo-600 disabled:opacity-40 text-white font-semibold rounded-lg shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span>Save All Pieces as Images</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===================== JOIN VIEW ===================== -->
+  <div id="view-join" class="hidden flex-1 min-h-0 flex flex-col lg:flex-row">
+
+    <main class="flex-1 min-h-0 flex flex-col bg-gray-950">
+
+      <div class="h-11 flex-shrink-0 border-b border-gray-800/80 bg-gray-900/60 px-3 flex items-center justify-between gap-2 text-xs text-gray-400">
+        <div class="flex items-center gap-1.5">
+          <button id="btn-join-add" class="px-2.5 py-1.5 font-semibold rounded-lg bg-gray-800 border border-gray-700 text-gray-200 flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Add Images</span>
+          </button>
+          <button id="btn-join-clear" class="px-2.5 py-1.5 font-semibold rounded-lg border border-gray-800 text-gray-400">Clear</button>
+        </div>
+        <span id="join-dimensions" class="font-mono text-gray-400 text-[10px] text-right"></span>
+      </div>
+
+      <div id="join-stage" class="flex-1 min-h-0 checkerboard relative flex items-center justify-center overflow-hidden">
+        <div id="join-empty" class="flex flex-col items-center justify-center text-center p-6 m-4 border-2 border-dashed border-gray-800 rounded-2xl bg-gray-900/50 max-w-md cursor-pointer">
+          <div class="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h7v14H4zM13 5h7v14h-7z"></path></svg>
+          </div>
+          <p class="text-sm font-semibold text-white mb-1">Tap to add images to join</p>
+          <p class="text-xs text-gray-400">Pick two or more images; reorder them below</p>
+        </div>
+        <canvas id="join-canvas" class="hidden shadow-2xl ring-1 ring-gray-800"></canvas>
+      </div>
+
+      <section class="h-28 flex-shrink-0 border-t border-gray-800 bg-gray-900/95 flex flex-col">
+        <div class="px-3 py-1 border-b border-gray-800/80 flex items-center justify-between text-[11px] text-gray-400">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-gray-300 uppercase tracking-wider text-[10px]">Images</span>
+            <span id="join-count" class="bg-gray-800 px-1.5 text-indigo-400 rounded font-mono">0</span>
+          </div>
+          <span class="text-gray-500 text-[10px]">Use ◀ ▶ to change the order</span>
+        </div>
+        <div id="join-list" class="flex-1 flex items-center gap-3 px-3 overflow-x-auto custom-scroll"></div>
+      </section>
+    </main>
+
+    <aside class="h-[40%] lg:h-auto flex-shrink-0 lg:w-80 xl:w-96 bg-gray-900 border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col text-sm">
+      <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-4">
+
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">1. Layout</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="v" class="join-dir-btn py-2 rounded-lg border text-xs font-medium">Vertical</button>
+            <button data-value="h" class="join-dir-btn py-2 rounded-lg border text-xs font-medium">Horizontal</button>
+            <button data-value="grid" class="join-dir-btn py-2 rounded-lg border text-xs font-medium">Grid</button>
+          </div>
+          <div id="join-cols-box" class="hidden mt-2 flex items-center gap-2">
+            <span class="text-[11px] text-gray-400 w-16">Columns</span>
+            <div class="flex-1 grid grid-cols-3 gap-1.5">
+              <button data-value="2" class="join-cols-btn py-1.5 rounded-lg border text-xs font-medium">2</button>
+              <button data-value="3" class="join-cols-btn py-1.5 rounded-lg border text-xs font-medium">3</button>
+              <button data-value="4" class="join-cols-btn py-1.5 rounded-lg border text-xs font-medium">4</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-800 pt-3">
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">2. Size Matching</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="largest" class="join-fit-btn py-2 rounded-lg border text-[11px] font-medium leading-tight">Match<br>largest</button>
+            <button data-value="smallest" class="join-fit-btn py-2 rounded-lg border text-[11px] font-medium leading-tight">Match<br>smallest</button>
+            <button data-value="original" class="join-fit-btn py-2 rounded-lg border text-[11px] font-medium leading-tight">Original<br>sizes</button>
+          </div>
+          <p id="join-fit-hint" class="text-[10px] text-gray-500 mt-1"></p>
+        </div>
+
+        <div class="border-t border-gray-800 pt-3">
+          <div class="flex justify-between text-[11px] font-semibold text-gray-300 uppercase tracking-wider">
+            <span>3. Spacing</span>
+            <span id="join-gap-val" class="font-mono text-indigo-400 normal-case">0 px</span>
+          </div>
+          <input type="range" id="join-gap" min="0" max="200" value="0" step="1" class="range">
+          <span class="text-[10px] text-gray-500 block mb-1.5">Background</span>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="transparent" class="join-bg-btn py-2 rounded-lg border text-xs font-medium">None</button>
+            <button data-value="#ffffff" class="join-bg-btn py-2 rounded-lg border text-xs font-medium">White</button>
+            <button data-value="#000000" class="join-bg-btn py-2 rounded-lg border text-xs font-medium">Black</button>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-800 pt-3">
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">4. Output Format</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="image/png" class="join-format-btn py-2 rounded-lg border text-xs font-medium">PNG</button>
+            <button data-value="image/jpeg" class="join-format-btn py-2 rounded-lg border text-xs font-medium">JPG</button>
+            <button data-value="image/webp" class="join-format-btn py-2 rounded-lg border text-xs font-medium">WEBP</button>
+          </div>
+          <div id="join-quality-box" class="hidden mt-2">
+            <div class="flex justify-between text-xs text-gray-400">
+              <span>Quality</span>
+              <span id="join-quality-val" class="font-mono text-white">90%</span>
+            </div>
+            <input type="range" id="join-quality" min="30" max="100" value="90" class="range">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-shrink-0 p-3 border-t border-gray-800 bg-gray-900">
+        <button id="btn-join-save" disabled class="w-full py-3 bg-indigo-600 disabled:opacity-40 text-white font-semibold rounded-lg shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span>Save Joined Image</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <div id="toast" class="hidden fixed left-1/2 -translate-x-1/2 bottom-24 z-50 max-w-[90%] bg-gray-800 border border-gray-700 text-gray-100 text-xs px-4 py-2.5 rounded-lg shadow-2xl text-center"></div>
+
+  <input type="file" id="file-input" accept="image/*" class="hidden">
+  <input type="file" id="join-file-input" accept="image/*" multiple class="hidden">
+
+  <script>
+    (function () {
+      'use strict';
+      const $ = (id) => document.getElementById(id);
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const THUMB_H = 48;
+      const THUMB_MAX_W = 130;
+
+      // ---------- Shared helpers ----------
+
+      const toastEl = $('toast');
+      let toastTimer = 0;
+      function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.remove('hidden');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2800);
+      }
+
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+      function extFor(mime) {
+        return mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+      }
+
+      // Encode a canvas; JPEG has no transparency, so flatten it onto white first
+      function canvasToFile(canvas, format, quality, baseName) {
+        let src = canvas;
+        if (format === 'image/jpeg') {
+          src = document.createElement('canvas');
+          src.width = canvas.width;
+          src.height = canvas.height;
+          const ctx = src.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, src.width, src.height);
+          ctx.drawImage(canvas, 0, 0);
+        }
+        const dataUrl = src.toDataURL(format, quality);
+        const mime = dataUrl.substring(5, dataUrl.indexOf(';'));
+        return { name: `${baseName}.${extFor(mime)}`, dataUrl };
+      }
+
+      // Inside the Android app the native bridge writes the file (WebView ignores
+      // <a download>). Returns 'ok', 'permission', or an error message.
+      function saveFile(file) {
+        if (window.AndroidBridge) {
+          const comma = file.dataUrl.indexOf(',');
+          const mime = file.dataUrl.substring(5, file.dataUrl.indexOf(';'));
+          return String(window.AndroidBridge.saveBase64(file.name, mime, file.dataUrl.slice(comma + 1)));
+        }
+        const a = document.createElement('a');
+        a.href = file.dataUrl;
+        a.download = file.name;
+        a.click();
+        return 'ok';
+      }
+
+      function reportSaves(results, what) {
+        if (results.includes('permission')) {
+          toast('Allow storage access, then tap save again');
+          return;
+        }
+        const failed = results.filter((r) => r !== 'ok');
+        if (failed.length) {
+          toast('Could not save: ' + failed[0]);
+          return;
+        }
+        toast(window.AndroidBridge ? `Saved ${what} to Downloads/ImageSplitter` : `Downloaded ${what}`);
+      }
+
+      function loadImage(src) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+      }
+
+      function loadImageFile(file) {
+        const url = URL.createObjectURL(file);
+        return loadImage(url).then((img) => {
+          URL.revokeObjectURL(url);
+          return img;
+        });
+      }
+
+      // Largest size that fits w×h inside the element, keeping the aspect ratio
+      function fitInto(el, w, h, pad) {
+        const sw = Math.max(1, el.clientWidth - pad * 2);
+        const sh = Math.max(1, el.clientHeight - pad * 2);
+        const s = Math.min(sw / w, sh / h);
+        return { w: Math.max(1, Math.floor(w * s)), h: Math.max(1, Math.floor(h * s)) };
+      }
+
+      function drawThumb(canvas, source, sx, sy, sw, sh) {
+        const scale = Math.min(THUMB_H / sh, THUMB_MAX_W / sw);
+        const cw = Math.max(1, Math.round(sw * scale));
+        const ch = Math.max(1, Math.round(sh * scale));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(cw * dpr);
+        canvas.height = Math.round(ch * dpr);
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        canvas.getContext('2d').drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Segmented button groups
+      const SEG_ON = ['bg-indigo-600', 'border-indigo-500', 'text-white'];
+      const SEG_OFF = ['bg-gray-800/60', 'border-gray-800', 'text-gray-300'];
+      function setSeg(buttons, active) {
+        buttons.forEach((b) => {
+          const on = b === active;
+          b.classList.remove(...(on ? SEG_OFF : SEG_ON));
+          b.classList.add(...(on ? SEG_ON : SEG_OFF));
+        });
+      }
+      function bindSeg(selector, initialValue, onPick) {
+        const buttons = Array.from(document.querySelectorAll(selector));
+        buttons.forEach((b) => b.addEventListener('click', () => {
+          setSeg(buttons, b);
+          onPick(b.dataset.value);
+        }));
+        setSeg(buttons, buttons.find((b) => b.dataset.value === initialValue));
+      }
+
+      // ---------- Tabs ----------
+
+      const tabs = { split: $('tab-split'), join: $('tab-join') };
+      let activeView = 'split';
+      function showView(name) {
+        activeView = name;
+        $('view-split').classList.toggle('hidden', name !== 'split');
+        $('view-join').classList.toggle('hidden', name !== 'join');
+        setSeg([tabs.split, tabs.join], tabs[name]);
+        if (name === 'split') layoutSplit(); else renderJoin();
+      }
+      tabs.split.onclick = () => showView('split');
+      tabs.join.onclick = () => showView('join');
+
+      // ===================== SPLITTER =====================
+
+      const split = {
+        source: null,
+        rotation: 0,
+        flipH: false,
+        flipV: false,
+        W: 0,
+        H: 0,
+        dispW: 0,
+        dispH: 0,
+        mode: '2-h', // '2-h', '2-v', '4-grid', '4-h', '4-v'
+        cutsY: [], // cut positions in source pixels
+        cutsX: [],
+        unit: 'px',
+        format: 'image/png',
+        quality: 0.9
+      };
+
+      const MODES = {
+        '2-h': { rows: 2, cols: 1, names: ['Top', 'Bottom'] },
+        '2-v': { rows: 1, cols: 2, names: ['Left', 'Right'] },
+        '4-grid': { rows: 2, cols: 2, names: ['TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'] },
+        '4-h': { rows: 4, cols: 1, names: null },
+        '4-v': { rows: 1, cols: 4, names: null }
+      };
+
+      const fileInput = $('file-input');
+      const stage = $('stage');
+      const splitEmpty = $('split-empty');
+      const imageWrapper = $('image-wrapper');
+      const mainCanvas = $('main-canvas');
+      const svgOverlay = $('svg-overlay');
+      const tooltip = $('drag-tooltip');
+      const slicesContainer = $('slices-container');
+      const badgePieceCount = $('badge-piece-count');
+      const labelDimensions = $('label-dimensions');
+      const btnSaveAll = $('btn-save-all');
+
+      const primaryCtl = {
+        input: $('input-dim-primary'),
+        slider: $('slider-primary'),
+        badge: $('badge-primary-val'),
+        nudges: document.querySelectorAll('.nudge-btn')
+      };
+      const secondaryCtl = {
+        input: $('input-dim-secondary'),
+        slider: $('slider-secondary'),
+        badge: $('badge-secondary-val'),
+        nudges: document.querySelectorAll('.nudge-sec-btn')
+      };
+
+      const openPicker = () => { fileInput.value = ''; fileInput.click(); };
+      $('btn-open').onclick = openPicker;
+      splitEmpty.onclick = openPicker;
+      fileInput.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) openSplitFile(e.target.files[0]);
+      };
+
+      function openSplitFile(file) {
+        loadImageFile(file).then((img) => {
+          if (img) setSplitSource(img); else toast('Could not open that image');
+        });
+      }
+
+      // Clipboard paste goes to whichever tool is open
+      window.addEventListener('paste', (e) => {
+        const items = (e.clipboardData && e.clipboardData.items) || [];
+        const files = [];
+        for (const item of items) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) files.push(item.getAsFile());
+        }
+        if (!files.length) return;
+        if (activeView === 'join') addJoinFiles(files); else openSplitFile(files[0]);
+      });
+
+      // Drag and drop files
+      [stage, $('join-stage')].forEach((el) => {
+        el.addEventListener('dragover', (e) => { e.preventDefault(); });
+        el.addEventListener('drop', (e) => {
+          e.preventDefault();
+          const files = e.dataTransfer && e.dataTransfer.files;
+          if (!files || !files.length) return;
+          if (el === stage) openSplitFile(files[0]); else addJoinFiles(files);
+        });
+      });
+
+      // Sample Generator
+      $('btn-demo').onclick = () => {
+        const c = document.createElement('canvas');
+        c.width = 1200;
+        c.height = 800;
+        const ctx = c.getContext('2d');
+        const grad = ctx.createLinearGradient(0, 0, 1200, 800);
+        grad.addColorStop(0, '#312e81');
+        grad.addColorStop(0.5, '#4f46e5');
+        grad.addColorStop(1, '#06b6d4');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 1200, 800);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        for (let i = 0; i < 20; i++) {
+          ctx.beginPath();
+          ctx.arc(Math.random() * 1200, Math.random() * 800, 50 + Math.random() * 120, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 52px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('SAMPLE IMAGE FOR SPLITTING', 600, 390);
+        ctx.font = '24px sans-serif';
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillText('1200 × 800 px — High Resolution Test Canvas', 600, 440);
+
+        loadImage(c.toDataURL()).then((img) => img && setSplitSource(img));
+      };
+
+      function setSplitSource(img) {
+        split.source = img;
+        split.rotation = 0;
+        split.flipH = false;
+        split.flipV = false;
+        applyOrientation(true);
+      }
+
+      // Bake rotation/flips into the full-resolution working canvas
+      function applyOrientation(resetCutsToo) {
+        const img = split.source;
+        if (!img) return;
+        const swap = split.rotation % 180 !== 0;
+        const W = swap ? img.naturalHeight : img.naturalWidth;
+        const H = swap ? img.naturalWidth : img.naturalHeight;
+
+        mainCanvas.width = W;
+        mainCanvas.height = H;
+        const ctx = mainCanvas.getContext('2d');
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.rotate((split.rotation * Math.PI) / 180);
+        ctx.scale(split.flipH ? -1 : 1, split.flipV ? -1 : 1);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        ctx.restore();
+
+        const sizeChanged = W !== split.W || H !== split.H;
+        split.W = W;
+        split.H = H;
+        if (resetCutsToo || sizeChanged) resetCuts();
+
+        splitEmpty.classList.add('hidden');
+        imageWrapper.classList.remove('hidden');
+        btnSaveAll.disabled = false;
+        labelDimensions.textContent = `${W} × ${H} px`;
+
+        buildGuides();
+        layoutSplit();
+        syncInputs();
+        renderPieces();
+      }
+
+      $('btn-rot-cw').onclick = () => { if (!split.source) return; split.rotation = (split.rotation + 90) % 360; applyOrientation(); };
+      $('btn-rot-ccw').onclick = () => { if (!split.source) return; split.rotation = (split.rotation + 270) % 360; applyOrientation(); };
+      $('btn-flip-h').onclick = () => { if (!split.source) return; split.flipH = !split.flipH; applyOrientation(); };
+      $('btn-flip-v').onclick = () => { if (!split.source) return; split.flipV = !split.flipV; applyOrientation(); };
+
+      // ---------- Cut positions ----------
+
+      function evenCuts(total, pieces) {
+        const cuts = [];
+        for (let i = 1; i < pieces; i++) cuts.push(Math.round((total * i) / pieces));
+        return cuts;
+      }
+
+      function resetCuts() {
+        const m = MODES[split.mode];
+        split.cutsY = evenCuts(split.H, m.rows);
+        split.cutsX = evenCuts(split.W, m.cols);
+      }
+
+      const primaryAxis = () => (split.mode === '2-v' || split.mode === '4-v' ? 'x' : 'y');
+      const cutsFor = (axis) => (axis === 'x' ? split.cutsX : split.cutsY);
+      const totalFor = (axis) => (axis === 'x' ? split.W : split.H);
+
+      // Move one cut, keeping every piece at least 1px
+      function setCut(axis, i, px) {
+        const cuts = cutsFor(axis);
+        const lo = (i > 0 ? cuts[i - 1] : 0) + 1;
+        const hi = (i < cuts.length - 1 ? cuts[i + 1] : totalFor(axis)) - 1;
+        cuts[i] = Math.max(lo, Math.min(hi, Math.round(px)));
+      }
+
+      // The size controls set piece 1; in 4-piece strips the rest is shared evenly
+      function setPrimary(px) {
+        const axis = primaryAxis();
+        const cuts = cutsFor(axis);
+        if (cuts.length === 1) {
+          setCut(axis, 0, px);
+          return;
+        }
+        const total = totalFor(axis);
+        const first = Math.max(1, Math.min(total - cuts.length, Math.round(px)));
+        const rest = total - first;
+        for (let i = 0; i < cuts.length; i++) cuts[i] = first + Math.round((rest * i) / cuts.length);
+      }
+
+      const setSecondary = (px) => setCut('x', 0, px);
+
+      // ---------- Guide lines ----------
+
+      let guides = [];
+
+      function svgEl(tag, attrs) {
+        const el = document.createElementNS(SVG_NS, tag);
+        for (const k in attrs) el.setAttribute(k, attrs[k]);
+        return el;
+      }
+
+      // Built once per image/mode; dragging only moves them, so pointer capture is never lost
+      function buildGuides() {
+        svgOverlay.innerHTML = '';
+        guides = [];
+        ['y', 'x'].forEach((axis) => cutsFor(axis).forEach((_, i) => {
+          const g = svgEl('g', { class: 'guide ' + (axis === 'y' ? 'cursor-row-resize' : 'cursor-col-resize') });
+          const hit = svgEl('line', { stroke: 'transparent', 'stroke-width': 44, 'pointer-events': 'stroke' });
+          const shadow = svgEl('line', { stroke: 'rgba(0,0,0,0.55)', 'stroke-width': 4, 'pointer-events': 'none' });
+          const line = svgEl('line', { stroke: '#818cf8', 'stroke-width': 2, 'stroke-dasharray': '6 4', 'pointer-events': 'none' });
+          const handle = svgEl('circle', { r: 9, fill: '#4f46e5', stroke: '#ffffff', 'stroke-width': 2.5 });
+          g.append(hit, shadow, line, handle);
+          svgOverlay.appendChild(g);
+          const guide = { axis, i, g, lines: [hit, shadow, line], handle };
+          guides.push(guide);
+          attachDrag(guide);
+        }));
+      }
+
+      function positionGuides() {
+        const w = split.dispW;
+        const h = split.dispH;
+        if (!w) return;
+        // In the grid, keep the two handles apart so both are easy to grab
+        const along = split.mode === '4-grid' ? 0.25 : 0.5;
+        guides.forEach((gd) => {
+          const isY = gd.axis === 'y';
+          const pos = cutsFor(gd.axis)[gd.i] * (isY ? h / split.H : w / split.W);
+          gd.lines.forEach((l) => {
+            l.setAttribute('x1', isY ? 0 : pos);
+            l.setAttribute('y1', isY ? pos : 0);
+            l.setAttribute('x2', isY ? w : pos);
+            l.setAttribute('y2', isY ? pos : h);
+          });
+          gd.handle.setAttribute('cx', isY ? w * along : pos);
+          gd.handle.setAttribute('cy', isY ? pos : h * along);
+        });
+      }
+
+      let dragFrame = 0;
+      let pendingDrag = null;
+
+      function attachDrag(gd) {
+        gd.g.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          gd.g.setPointerCapture(e.pointerId);
+          gd.g.classList.add('dragging');
+
+          // Remember where on the line the finger landed so the line doesn't jump to it
+          const r = mainCanvas.getBoundingClientRect();
+          const isY = gd.axis === 'y';
+          const cut = cutsFor(gd.axis)[gd.i];
+          const linePos = isY ? r.top + (cut / split.H) * r.height : r.left + (cut / split.W) * r.width;
+          const offset = (isY ? e.clientY : e.clientX) - linePos;
+          showTooltip(gd);
+
+          const move = (pe) => {
+            pendingDrag = { gd, offset, x: pe.clientX, y: pe.clientY };
+            if (!dragFrame) dragFrame = requestAnimationFrame(applyDrag);
+          };
+          const end = (pe) => {
+            gd.g.removeEventListener('pointermove', move);
+            gd.g.removeEventListener('pointerup', end);
+            gd.g.removeEventListener('pointercancel', end);
+            try { gd.g.releasePointerCapture(pe.pointerId); } catch (err) {}
+            if (dragFrame) {
+              cancelAnimationFrame(dragFrame);
+              applyDrag();
+            }
+            gd.g.classList.remove('dragging');
+            tooltip.classList.add('hidden');
+            renderPieces();
+          };
+          gd.g.addEventListener('pointermove', move);
+          gd.g.addEventListener('pointerup', end);
+          gd.g.addEventListener('pointercancel', end);
+        });
+      }
+
+      // At most one update per animation frame, however fast pointer events arrive
+      function applyDrag() {
+        dragFrame = 0;
+        if (!pendingDrag) return;
+        const { gd, offset, x, y } = pendingDrag;
+        pendingDrag = null;
+        const r = mainCanvas.getBoundingClientRect();
+        const px = gd.axis === 'y'
+          ? ((y - offset - r.top) / r.height) * split.H
+          : ((x - offset - r.left) / r.width) * split.W;
+        setCut(gd.axis, gd.i, px);
+        positionGuides();
+        syncInputs();
+        showTooltip(gd);
+        schedulePieces();
+      }
+
+      function showTooltip(gd) {
+        const cut = cutsFor(gd.axis)[gd.i];
+        const total = totalFor(gd.axis);
+        tooltip.textContent = `${cut} px (${((cut / total) * 100).toFixed(1)}%)`;
+        const cx = parseFloat(gd.handle.getAttribute('cx'));
+        const cy = parseFloat(gd.handle.getAttribute('cy'));
+        tooltip.style.left = `${cx}px`;
+        // Flip below the handle when there's no room above it
+        tooltip.style.top = `${cy < 48 ? cy + 56 : cy}px`;
+        tooltip.classList.remove('hidden');
+      }
+
+      function layoutSplit() {
+        if (!split.W || activeView !== 'split') return;
+        const s = fitInto(stage, split.W, split.H, 16);
+        mainCanvas.style.width = `${s.w}px`;
+        mainCanvas.style.height = `${s.h}px`;
+        svgOverlay.setAttribute('viewBox', `0 0 ${s.w} ${s.h}`);
+        split.dispW = s.w;
+        split.dispH = s.h;
+        positionGuides();
+      }
+
+      // ---------- Pieces ----------
+
+      function pieceRects() {
+        const xs = [0, ...split.cutsX, split.W];
+        const ys = [0, ...split.cutsY, split.H];
+        const rects = [];
+        for (let r = 0; r < ys.length - 1; r++) {
+          for (let c = 0; c < xs.length - 1; c++) {
+            rects.push({ x: xs[c], y: ys[r], w: xs[c + 1] - xs[c], h: ys[r + 1] - ys[r] });
+          }
+        }
+        return rects;
+      }
+
+      function pieceName(i, p) {
+        const names = MODES[split.mode].names;
+        return `Part_${i + 1}${names ? '_' + names[i] : ''}_${p.w}x${p.h}`;
+      }
+
+      // Thumbnails are cheap scaled draws; full-resolution encoding only happens on save
+      let piecesTimer = 0;
+      function schedulePieces() {
+        if (piecesTimer) return;
+        piecesTimer = setTimeout(() => {
+          piecesTimer = 0;
+          renderPieces();
+        }, 100);
+      }
+
+      function renderPieces() {
+        if (!split.W) return;
+        const rects = pieceRects();
+        badgePieceCount.textContent = String(rects.length);
+
+        if (slicesContainer.firstElementChild && !slicesContainer.firstElementChild.dataset.piece) {
+          slicesContainer.innerHTML = '';
+        }
+        while (slicesContainer.children.length > rects.length) slicesContainer.lastElementChild.remove();
+
+        // Cards are reused so the strip doesn't flicker while a line is dragged
+        rects.forEach((p, i) => {
+          let card = slicesContainer.children[i];
+          if (!card) {
+            card = document.createElement('button');
+            card.dataset.piece = String(i);
+            card.className = 'flex-shrink-0 bg-gray-950 border border-gray-800 active:border-indigo-500 rounded-lg p-1.5 flex flex-col items-center gap-1 shadow-lg';
+            card.innerHTML = '<canvas class="rounded bg-gray-900"></canvas><div class="flex items-center justify-between gap-2 w-full px-0.5 text-[10px] text-gray-400 font-mono"><span></span><span></span></div>';
+            card.onclick = () => savePiece(i);
+            slicesContainer.appendChild(card);
+          }
+          drawThumb(card.querySelector('canvas'), mainCanvas, p.x, p.y, p.w, p.h);
+          const labels = card.querySelectorAll('span');
+          labels[0].textContent = `#${i + 1}`;
+          labels[1].textContent = `${p.w}×${p.h}`;
+        });
+      }
+
+      function pieceFile(i) {
+        const p = pieceRects()[i];
+        const c = document.createElement('canvas');
+        c.width = p.w;
+        c.height = p.h;
+        c.getContext('2d').drawImage(mainCanvas, p.x, p.y, p.w, p.h, 0, 0, p.w, p.h);
+        return canvasToFile(c, split.format, split.quality, pieceName(i, p));
+      }
+
+      function savePiece(i) {
+        const file = pieceFile(i);
+        reportSaves([saveFile(file)], file.name);
+      }
+
+      // Save every piece as its own image file
+      btnSaveAll.onclick = async () => {
+        if (!split.W) return;
+        const count = pieceRects().length;
+        const label = btnSaveAll.querySelector('span');
+        const original = label.textContent;
+        const results = [];
+        btnSaveAll.disabled = true;
+        try {
+          for (let i = 0; i < count; i++) {
+            label.textContent = `Saving ${i + 1} of ${count}…`;
+            await tick(); // let the label repaint between encodes
+            const result = saveFile(pieceFile(i));
+            results.push(result);
+            if (result === 'permission') break;
+          }
+        } finally {
+          label.textContent = original;
+          btnSaveAll.disabled = false;
+        }
+        reportSaves(results, `${results.length} images`);
+      };
+
+      // ---------- Controls ----------
+
+      function setSizeControls(ctl, px, total) {
+        const pct = ((px / total) * 100).toFixed(1);
+        // Don't rewrite the field while the user is typing in it
+        if (document.activeElement !== ctl.input) ctl.input.value = split.unit === 'px' ? px : pct;
+        ctl.slider.max = String(total - 1);
+        ctl.slider.value = String(px);
+        ctl.badge.textContent = `${px} px · ${pct}%`;
+      }
+
+      function syncInputs() {
+        if (!split.W) return;
+        const axis = primaryAxis();
+        $('label-primary-dim').textContent = axis === 'y' ? 'Piece 1 height' : 'Piece 1 width';
+        setSizeControls(primaryCtl, cutsFor(axis)[0], totalFor(axis));
+        $('secondary-block').classList.toggle('hidden', split.mode !== '4-grid');
+        $('hint-4piece').classList.toggle('hidden', split.mode !== '4-h' && split.mode !== '4-v');
+        if (split.mode === '4-grid') setSizeControls(secondaryCtl, split.cutsX[0], split.W);
+      }
+
+      function afterEdit() {
+        positionGuides();
+        syncInputs();
+        schedulePieces();
+      }
+
+      function wireSizeControl(ctl, apply, current, total) {
+        ctl.input.addEventListener('input', () => {
+          const v = parseFloat(ctl.input.value);
+          if (!split.W || isNaN(v)) return;
+          apply(split.unit === 'px' ? v : (v / 100) * total());
+          afterEdit();
+        });
+        ctl.input.addEventListener('blur', syncInputs);
+        ctl.slider.addEventListener('input', () => {
+          if (!split.W) return;
+          apply(parseFloat(ctl.slider.value));
+          afterEdit();
+        });
+        ctl.nudges.forEach((b) => b.addEventListener('click', () => {
+          if (!split.W) return;
+          apply(current() + parseInt(b.dataset.nudge, 10));
+          afterEdit();
+        }));
+      }
+
+      wireSizeControl(primaryCtl, setPrimary, () => cutsFor(primaryAxis())[0], () => totalFor(primaryAxis()));
+      wireSizeControl(secondaryCtl, setSecondary, () => split.cutsX[0], () => split.W);
+
+      bindSeg('.mode-btn', split.mode, (mode) => {
+        split.mode = mode;
+        if (!split.W) return;
+        resetCuts();
+        buildGuides();
+        positionGuides();
+        syncInputs();
+        renderPieces();
+      });
+
+      bindSeg('.unit-btn', split.unit, (unit) => {
+        split.unit = unit;
+        document.querySelectorAll('.unit-indicator').forEach((el) => { el.textContent = unit === 'px' ? 'px' : '%'; });
+        syncInputs();
+      });
+
+      document.querySelectorAll('.preset-btn').forEach((btn) => {
+        btn.onclick = () => {
+          if (!split.W) return;
+          const ratio = parseFloat(btn.dataset.preset);
+          setPrimary(ratio * totalFor(primaryAxis()));
+          if (split.mode === '4-grid') setSecondary(ratio * split.W);
+          afterEdit();
+        };
+      });
+
+      bindSeg('.split-format-btn', split.format, (format) => {
+        split.format = format;
+        $('split-quality-box').classList.toggle('hidden', format === 'image/png');
+      });
+      $('split-quality').oninput = (e) => {
+        split.quality = parseInt(e.target.value, 10) / 100;
+        $('split-quality-val').textContent = `${e.target.value}%`;
+      };
+
+      // ===================== JOINER =====================
+
+      const join = {
+        items: [], // { img, name }
+        dir: 'v', // 'v', 'h', 'grid'
+        cols: 2,
+        fit: 'largest', // 'largest', 'smallest', 'original'
+        gap: 0,
+        bg: 'transparent',
+        format: 'image/png',
+        quality: 0.9
+      };
+
+      // Keep the saved image within what phone browsers can safely allocate
+      const MAX_SIDE = 16384;
+      const MAX_AREA = 40000000;
+
+      const joinFileInput = $('join-file-input');
+      const joinStage = $('join-stage');
+      const joinCanvas = $('join-canvas');
+      const joinList = $('join-list');
+      const btnJoinSave = $('btn-join-save');
+
+      const openJoinPicker = () => { joinFileInput.value = ''; joinFileInput.click(); };
+      $('btn-join-add').onclick = openJoinPicker;
+      $('join-empty').onclick = openJoinPicker;
+      joinFileInput.onchange = (e) => addJoinFiles(e.target.files);
+      $('btn-join-clear').onclick = () => {
+        join.items = [];
+        renderJoinList();
+        renderJoin();
+      };
+
+      function addJoinFiles(files) {
+        const list = Array.from(files || []);
+        if (!list.length) return;
+        Promise.all(list.map(loadImageFile)).then((imgs) => {
+          imgs.forEach((img, k) => {
+            if (img) join.items.push({ img, name: list[k].name });
+          });
+          if (imgs.some((img) => !img)) toast('Some files could not be opened');
+          renderJoinList();
+          renderJoin();
+        });
+      }
+
+      // Place every image: rows/columns are as large as their biggest member, images centred in their cell
+      function joinLayout() {
+        const items = join.items;
+        if (!items.length) return null;
+        const byWidth = join.dir !== 'h'; // stacks and grids match widths; side-by-side matches heights
+        const matchOf = (img) => (byWidth ? img.naturalWidth : img.naturalHeight);
+        const sizes = items.map((it) => matchOf(it.img));
+        const target = join.fit === 'largest' ? Math.max(...sizes) : join.fit === 'smallest' ? Math.min(...sizes) : 0;
+        const dims = items.map((it) => {
+          const w = it.img.naturalWidth;
+          const h = it.img.naturalHeight;
+          if (!target) return { w, h };
+          const s = target / matchOf(it.img);
+          return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
+        });
+
+        const cols = join.dir === 'v' ? 1 : join.dir === 'h' ? items.length : Math.min(join.cols, items.length);
+        const rows = Math.ceil(items.length / cols);
+        const colW = new Array(cols).fill(0);
+        const rowH = new Array(rows).fill(0);
+        dims.forEach((d, i) => {
+          colW[i % cols] = Math.max(colW[i % cols], d.w);
+          rowH[Math.floor(i / cols)] = Math.max(rowH[Math.floor(i / cols)], d.h);
+        });
+        const colX = [0];
+        const rowY = [0];
+        for (let c = 1; c < cols; c++) colX.push(colX[c - 1] + colW[c - 1] + join.gap);
+        for (let r = 1; r < rows; r++) rowY.push(rowY[r - 1] + rowH[r - 1] + join.gap);
+        const W = colX[cols - 1] + colW[cols - 1];
+        const H = rowY[rows - 1] + rowH[rows - 1];
+
+        const rects = dims.map((d, i) => {
+          const c = i % cols;
+          const r = Math.floor(i / cols);
+          return { x: colX[c] + (colW[c] - d.w) / 2, y: rowY[r] + (rowH[r] - d.h) / 2, w: d.w, h: d.h };
+        });
+        return { W, H, rects };
+      }
+
+      function exportScale(layout) {
+        return Math.min(1, MAX_SIDE / Math.max(layout.W, layout.H), Math.sqrt(MAX_AREA / (layout.W * layout.H)));
+      }
+
+      function drawJoin(canvas, layout, scale) {
+        canvas.width = Math.max(1, Math.round(layout.W * scale));
+        canvas.height = Math.max(1, Math.round(layout.H * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (join.bg !== 'transparent') {
+          ctx.fillStyle = join.bg;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.imageSmoothingQuality = 'high';
+        join.items.forEach((it, i) => {
+          const r = layout.rects[i];
+          ctx.drawImage(it.img, r.x * scale, r.y * scale, r.w * scale, r.h * scale);
+        });
+      }
+
+      // Preview is drawn at screen resolution, coalesced to one draw per frame
+      let joinFrame = 0;
+      function renderJoin() {
+        if (!joinFrame) joinFrame = requestAnimationFrame(drawJoinPreview);
+      }
+
+      function drawJoinPreview() {
+        joinFrame = 0;
+        const layout = joinLayout();
+        $('join-empty').classList.toggle('hidden', !!layout);
+        joinCanvas.classList.toggle('hidden', !layout);
+        btnJoinSave.disabled = !layout;
+        $('join-fit-hint').textContent = join.fit === 'original'
+          ? 'Images keep their own size and are centred.'
+          : `Images are resized to the same ${join.dir === 'h' ? 'height' : 'width'}.`;
+        if (!layout) {
+          $('join-dimensions').textContent = '';
+          return;
+        }
+        const s = exportScale(layout);
+        $('join-dimensions').textContent = `${Math.round(layout.W * s)} × ${Math.round(layout.H * s)} px${s < 1 ? ' (reduced to fit)' : ''}`;
+        if (activeView !== 'join') return;
+        const fit = fitInto(joinStage, layout.W, layout.H, 16);
+        const dpr = window.devicePixelRatio || 1;
+        drawJoin(joinCanvas, layout, Math.min(1, (fit.w * dpr) / layout.W));
+        joinCanvas.style.width = `${fit.w}px`;
+        joinCanvas.style.height = `${fit.h}px`;
+      }
+
+      function renderJoinList() {
+        joinList.innerHTML = '';
+        const n = join.items.length;
+        $('join-count').textContent = String(n);
+        join.items.forEach((it, i) => {
+          const card = document.createElement('div');
+          card.className = 'flex-shrink-0 bg-gray-950 border border-gray-800 rounded-lg p-1.5 flex flex-col items-center gap-1 shadow-lg';
+          const thumb = document.createElement('canvas');
+          thumb.className = 'rounded bg-gray-900';
+          drawThumb(thumb, it.img, 0, 0, it.img.naturalWidth, it.img.naturalHeight);
+          const bar = document.createElement('div');
+          bar.className = 'flex items-center justify-between gap-1 w-full text-[11px] text-gray-300 font-mono';
+          const btn = (label, title, disabled, onClick) => {
+            const b = document.createElement('button');
+            b.textContent = label;
+            b.title = title;
+            b.disabled = disabled;
+            b.className = 'px-1.5 py-0.5 rounded bg-gray-800 disabled:opacity-30';
+            b.onclick = onClick;
+            return b;
+          };
+          const index = document.createElement('span');
+          index.textContent = `#${i + 1}`;
+          bar.append(
+            btn('◀', 'Move earlier', i === 0, () => moveJoinItem(i, -1)),
+            index,
+            btn('▶', 'Move later', i === n - 1, () => moveJoinItem(i, 1)),
+            btn('✕', 'Remove', false, () => removeJoinItem(i))
+          );
+          card.append(thumb, bar);
+          joinList.appendChild(card);
+        });
+
+        const add = document.createElement('button');
+        add.className = 'flex-shrink-0 h-20 w-20 border-2 border-dashed border-gray-700 rounded-lg text-gray-400 text-xs flex flex-col items-center justify-center gap-1';
+        add.innerHTML = '<span class="text-xl leading-none">+</span><span>Add</span>';
+        add.onclick = openJoinPicker;
+        joinList.appendChild(add);
+      }
+
+      function moveJoinItem(i, delta) {
+        const j = i + delta;
+        if (j < 0 || j >= join.items.length) return;
+        [join.items[i], join.items[j]] = [join.items[j], join.items[i]];
+        renderJoinList();
+        renderJoin();
+      }
+
+      function removeJoinItem(i) {
+        join.items.splice(i, 1);
+        renderJoinList();
+        renderJoin();
+      }
+
+      btnJoinSave.onclick = async () => {
+        const layout = joinLayout();
+        if (!layout) return;
+        const label = btnJoinSave.querySelector('span');
+        const original = label.textContent;
+        btnJoinSave.disabled = true;
+        label.textContent = 'Saving…';
+        let result;
+        let name;
+        try {
+          await tick();
+          const c = document.createElement('canvas');
+          drawJoin(c, layout, exportScale(layout));
+          const file = canvasToFile(c, join.format, join.quality, `Joined_${join.items.length}_images_${c.width}x${c.height}`);
+          name = file.name;
+          result = saveFile(file);
+        } catch (err) {
+          result = err.message || String(err);
+        } finally {
+          label.textContent = original;
+          btnJoinSave.disabled = false;
+        }
+        reportSaves([result], name);
+      };
+
+      bindSeg('.join-dir-btn', join.dir, (dir) => {
+        join.dir = dir;
+        $('join-cols-box').classList.toggle('hidden', dir !== 'grid');
+        renderJoin();
+      });
+      bindSeg('.join-cols-btn', String(join.cols), (cols) => {
+        join.cols = parseInt(cols, 10);
+        renderJoin();
+      });
+      bindSeg('.join-fit-btn', join.fit, (fit) => {
+        join.fit = fit;
+        renderJoin();
+      });
+      bindSeg('.join-bg-btn', join.bg, (bg) => {
+        join.bg = bg;
+        renderJoin();
+      });
+      bindSeg('.join-format-btn', join.format, (format) => {
+        join.format = format;
+        $('join-quality-box').classList.toggle('hidden', format === 'image/png');
+      });
+      $('join-gap').oninput = (e) => {
+        join.gap = parseInt(e.target.value, 10);
+        $('join-gap-val').textContent = `${join.gap} px`;
+        renderJoin();
+      };
+      $('join-quality').oninput = (e) => {
+        join.quality = parseInt(e.target.value, 10) / 100;
+        $('join-quality-val').textContent = `${e.target.value}%`;
+      };
+
+      // ---------- Startup ----------
+
+      // Re-fit whenever the screen size changes (rotation, keyboard, split screen)
+      new ResizeObserver(() => layoutSplit()).observe(stage);
+      new ResizeObserver(() => renderJoin()).observe(joinStage);
+
+      renderJoinList();
+      showView('split');
+    })();
+  </script>
+</body>
+</html>

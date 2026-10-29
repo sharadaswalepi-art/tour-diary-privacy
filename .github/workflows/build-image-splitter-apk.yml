@@ -1,0 +1,50 @@
+name: Build Image Splitter APK
+
+on:
+  push:
+    paths:
+      - 'image-splitter-android/**'
+      - '.github/workflows/build-image-splitter-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: image-splitter-android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ImageSplitter.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ImageSplitter-apk
+          path: image-splitter-android/ImageSplitter.apk
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: image-splitter-build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Image Splitter APK (build ${{ github.run_number }})
+          body: |
+            Android APK for Precision Image Splitter, built from ${{ github.sha }}.
+            Download **ImageSplitter.apk** on your phone and open it to install
+            (allow "Install unknown apps" for your browser if Android asks).
+          files: image-splitter-android/ImageSplitter.apk
