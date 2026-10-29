@@ -1,7 +1,8 @@
 # Precision Image Splitter — Android app
 
-A native Android wrapper (WebView) around the Precision Image Splitter web app.
-Everything is bundled in the APK (Tailwind CSS and JSZip included), so it works offline.
+A native Android wrapper (WebView) around the Precision Image Splitter web app, with
+two tools: **Split** (cut one image into 2 or 4 pieces) and **Join** (combine several
+images into one). Everything is bundled in the APK, so it works offline.
 
 ## Getting the APK
 
@@ -16,8 +17,11 @@ Requires Android 8.0 or newer.
 
 ## In the app
 
-- **Open Image / Select from Device** opens the Android image picker.
-- Tapping a piece, or **Download ZIP**, saves to `Downloads/ImageSplitter/`.
+- **Split:** open an image, drag the cut lines (or use the size controls), then tap a
+  piece to save it, or **Save All Pieces as Images** to save each piece as its own file.
+- **Join:** add images, reorder them with ◀ ▶, choose vertical / horizontal / grid,
+  size matching, spacing and background, then **Save Joined Image**.
+- Everything is saved as image files (PNG, JPG or WEBP) to `Downloads/ImageSplitter/`.
 
 ## Building locally
 

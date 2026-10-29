@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Precision Image Splitter Studio</title>
   <!-- Bundled locally (instead of CDN) so the Android app works offline -->
   <link rel="stylesheet" href="tailwind.css">
-  <script src="jszip.min.js"></script>
   <style>
     /* Prevent default gestures & bouncing while dragging */
     .touch-locked {
@@ -36,361 +35,572 @@
       background: #374151;
       border-radius: 3px;
     }
+    /* Large, touch-friendly range sliders */
+    .range {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 32px;
+      background: transparent;
+      touch-action: pan-y;
+    }
+    .range::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: #1f2937;
+    }
+    .range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      margin-top: -9px;
+      border-radius: 9999px;
+      background: #6366f1;
+      border: 3px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    }
+    .guide.dragging line:nth-child(3) {
+      stroke: #c7d2fe;
+    }
+    .guide.dragging circle {
+      r: 12px;
+    }
   </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans antialiased select-none custom-scroll">
+<body class="h-full bg-gray-950 text-gray-100 flex flex-col overflow-hidden font-sans antialiased select-none">
 
   <!-- Top App Navigation -->
-  <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between z-20">
-    <div class="flex items-center space-x-3">
-      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+  <header class="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-3 py-2 flex items-center justify-between gap-2 z-20">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-8 h-8 flex-shrink-0 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
         </svg>
       </div>
-      <div>
-        <h1 class="text-sm font-bold tracking-wide text-white flex items-center gap-2">
-          Precision Image Splitter
-          <span class="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-mono">PRO</span>
-        </h1>
-        <p class="text-[11px] text-gray-400 hidden sm:block">Horizontal, Vertical & 2×2 Custom Splitting</p>
-      </div>
+      <h1 class="text-sm font-bold tracking-wide text-white flex items-center gap-2 truncate">
+        Image Studio
+        <span class="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-mono">PRO</span>
+      </h1>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="flex items-center space-x-2">
-      <input type="file" id="file-input" accept="image/*" class="hidden">
-      <button id="btn-browse-top" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 transition flex items-center gap-1.5">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-        <span>Open Image</span>
-      </button>
-      <button id="btn-demo" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-900/40 hover:bg-indigo-900/60 border border-indigo-700/50 text-indigo-300 transition">
-        Use Sample
-      </button>
-      <button id="btn-export-zip-all" disabled class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg transition flex items-center gap-1.5">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-        <span>Download ZIP</span>
-      </button>
+    <!-- Tool Tabs -->
+    <div class="flex bg-gray-800 rounded-lg p-0.5 text-xs gap-0.5">
+      <button id="tab-split" class="px-4 py-1.5 rounded-md border font-semibold transition">Split</button>
+      <button id="tab-join" class="px-4 py-1.5 rounded-md border font-semibold transition">Join</button>
     </div>
   </header>
 
-  <!-- Main Body Layout -->
-  <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+  <!-- ===================== SPLIT VIEW ===================== -->
+  <div id="view-split" class="flex-1 min-h-0 flex flex-col lg:flex-row">
 
-    <!-- Interactive Left / Center Stage -->
-    <main class="flex-1 flex flex-col bg-gray-950 min-h-0 relative">
+    <main class="flex-1 min-h-0 flex flex-col bg-gray-950">
 
       <!-- Viewport Action Toolbar -->
-      <div class="h-10 border-b border-gray-800/80 bg-gray-900/60 px-4 flex items-center justify-between text-xs text-gray-400">
-        <div class="flex items-center gap-2">
-          <span id="label-dimensions" class="font-mono text-gray-300 text-[11px]">No image selected</span>
-          <span id="label-aspect" class="text-[10px] text-gray-500 hidden sm:inline"></span>
+      <div class="h-11 flex-shrink-0 border-b border-gray-800/80 bg-gray-900/60 px-3 flex items-center justify-between gap-2 text-xs text-gray-400">
+        <div class="flex items-center gap-1.5">
+          <button id="btn-open" class="px-2.5 py-1.5 font-semibold rounded-lg bg-gray-800 border border-gray-700 text-gray-200 flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Open</span>
+          </button>
+          <button id="btn-demo" class="px-2.5 py-1.5 font-semibold rounded-lg bg-indigo-900/40 border border-indigo-700/50 text-indigo-300">Sample</button>
+          <span id="label-dimensions" class="font-mono text-gray-400 text-[10px] ml-1 hidden sm:inline"></span>
         </div>
         <div class="flex items-center gap-1">
-          <button id="btn-rot-ccw" title="Rotate Counter-Clockwise" class="p-1 hover:bg-gray-800 rounded transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
-          <button id="btn-rot-cw" title="Rotate Clockwise" class="p-1 hover:bg-gray-800 rounded transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg></button>
-          <span class="w-px h-3 bg-gray-800 mx-1"></span>
-          <button id="btn-flip-h" title="Flip Horizontal" class="p-1 hover:bg-gray-800 rounded transition font-mono text-[10px] border border-gray-800 px-1.5">Flip H</button>
-          <button id="btn-flip-v" title="Flip Vertical" class="p-1 hover:bg-gray-800 rounded transition font-mono text-[10px] border border-gray-800 px-1.5">Flip V</button>
+          <button id="btn-rot-ccw" title="Rotate Counter-Clockwise" class="p-1.5 rounded border border-gray-800"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M4.6 15a8 8 0 101.9-8.3L4 9"></path></svg></button>
+          <button id="btn-rot-cw" title="Rotate Clockwise" class="p-1.5 rounded border border-gray-800"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 4v5h-5M19.4 15a8 8 0 11-1.9-8.3L20 9"></path></svg></button>
+          <button id="btn-flip-h" title="Flip Horizontal" class="p-1.5 rounded font-mono text-[10px] border border-gray-800 px-2">Flip H</button>
+          <button id="btn-flip-v" title="Flip Vertical" class="p-1.5 rounded font-mono text-[10px] border border-gray-800 px-2">Flip V</button>
         </div>
       </div>
 
       <!-- Canvas & Image Work Area -->
-      <div id="stage-viewport" class="flex-1 checkerboard relative flex items-center justify-center p-4 overflow-hidden touch-locked">
+      <div id="stage" class="flex-1 min-h-0 checkerboard relative flex items-center justify-center overflow-hidden touch-locked">
 
-        <!-- Empty Dropzone State -->
-        <div id="empty-state" class="flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-gray-800 hover:border-indigo-500/50 rounded-2xl bg-gray-900/50 backdrop-blur max-w-md transition cursor-pointer">
-          <div class="w-14 h-14 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-4">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <!-- Empty State -->
+        <div id="split-empty" class="flex flex-col items-center justify-center text-center p-6 m-4 border-2 border-dashed border-gray-800 rounded-2xl bg-gray-900/50 max-w-md cursor-pointer">
+          <div class="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           </div>
-          <p class="text-sm font-semibold text-white mb-1">Click to Upload or Drag & Drop</p>
-          <p class="text-xs text-gray-400 mb-4">PNG, JPG, WEBP supported. You can also paste directly with <kbd class="px-1 py-0.5 bg-gray-800 rounded text-gray-300">Ctrl+V</kbd></p>
-          <button id="btn-browse-hero" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-lg shadow-indigo-600/30">Select from Device</button>
+          <p class="text-sm font-semibold text-white mb-1">Tap to choose an image</p>
+          <p class="text-xs text-gray-400">PNG, JPG, WEBP supported</p>
         </div>
 
         <!-- Working Image Frame with SVG Overlay -->
-        <div id="image-wrapper" class="relative hidden shadow-2xl rounded border border-gray-800 overflow-hidden touch-locked select-none" style="max-height: calc(100vh - 180px); max-width: 100%;">
-
-          <!-- Native Visible Scaled Image -->
-          <img id="main-image" class="block max-h-[70vh] max-w-full w-auto h-auto object-contain pointer-events-none select-none" alt="Splitting target" />
-
-          <!-- Interactive SVG Slicing Lines -->
+        <div id="image-wrapper" class="relative hidden shadow-2xl ring-1 ring-gray-800">
+          <canvas id="main-canvas" class="block"></canvas>
           <svg id="svg-overlay" class="absolute inset-0 w-full h-full touch-locked z-10 overflow-visible"></svg>
-
-          <!-- Floating Drag Dimension Tooltip -->
-          <div id="drag-tooltip" class="absolute hidden z-30 pointer-events-none bg-gray-900/90 text-indigo-300 border border-indigo-500/40 text-[11px] font-mono px-2 py-1 rounded shadow-xl -translate-x-1/2 -translate-y-8 backdrop-blur whitespace-nowrap">
-            500 px
-          </div>
+          <div id="drag-tooltip" class="absolute hidden z-30 pointer-events-none bg-gray-900/90 text-indigo-300 border border-indigo-500/40 text-[11px] font-mono px-2 py-1 rounded shadow-xl -translate-x-1/2 -translate-y-full -mt-4 whitespace-nowrap"></div>
         </div>
-
       </div>
 
-      <!-- Realtime Slices Bottom Drawer -->
-      <section class="h-44 sm:h-48 border-t border-gray-800 bg-gray-900/95 flex flex-col z-10">
-        <div class="px-4 py-1.5 border-b border-gray-800/80 flex items-center justify-between text-[11px] text-gray-400">
+      <!-- Realtime Pieces Strip -->
+      <section class="h-28 flex-shrink-0 border-t border-gray-800 bg-gray-900/95 flex flex-col">
+        <div class="px-3 py-1 border-b border-gray-800/80 flex items-center justify-between text-[11px] text-gray-400">
           <div class="flex items-center gap-2">
-            <span class="font-bold text-gray-300 uppercase tracking-wider text-[10px]">Realtime Pieces Preview</span>
-            <span id="badge-piece-count" class="bg-gray-800 px-1.5 py-0.2 text-indigo-400 rounded font-mono">0 pieces</span>
+            <span class="font-bold text-gray-300 uppercase tracking-wider text-[10px]">Pieces</span>
+            <span id="badge-piece-count" class="bg-gray-800 px-1.5 text-indigo-400 rounded font-mono">0</span>
           </div>
-          <span class="text-gray-500 text-[10px]">Click any piece to download individually</span>
+          <span class="text-gray-500 text-[10px]">Tap a piece to save it</span>
         </div>
-        <div id="slices-container" class="flex-1 flex items-center gap-4 px-4 overflow-x-auto custom-scroll py-2">
-          <!-- Dynamic slice cards inserted here -->
-          <div class="text-xs text-gray-500 italic m-auto">Upload an image to see live slices here.</div>
+        <div id="slices-container" class="flex-1 flex items-center gap-3 px-3 overflow-x-auto custom-scroll">
+          <div class="text-xs text-gray-500 italic m-auto">Open an image to see the pieces here.</div>
         </div>
       </section>
-
     </main>
 
-    <!-- Right Controls Sidebar -->
-    <aside class="w-full lg:w-80 xl:w-96 bg-gray-900 border-l border-gray-800 flex flex-col flex-shrink-0 text-sm overflow-y-auto custom-scroll p-4 gap-5">
+    <!-- Controls -->
+    <aside class="h-[40%] lg:h-auto flex-shrink-0 lg:w-80 xl:w-96 bg-gray-900 border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col text-sm">
+      <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-4">
 
-      <!-- Split Mode Selector -->
-      <div>
-        <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">1. Splitting Mode</label>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-
-          <button data-mode="2-h" class="mode-btn active p-2.5 rounded-lg border border-indigo-500 bg-indigo-500/10 text-white font-medium flex items-center gap-2 transition">
-            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
-            <span>2 Pieces (Horizontal)</span>
-          </button>
-
-          <button data-mode="2-v" class="mode-btn p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
-            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
-            <span>2 Pieces (Vertical)</span>
-          </button>
-
-          <button data-mode="4-grid" class="mode-btn p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
-            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
-            <span>4 Pieces (2×2 Grid)</span>
-          </button>
-
-          <button data-mode="4-h" class="mode-btn p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
-            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
-            <span>4 Pieces (Horizontal)</span>
-          </button>
-
-          <button data-mode="4-v" class="mode-btn col-span-2 p-2.5 rounded-lg border border-gray-800 bg-gray-800/60 hover:bg-gray-800 text-gray-300 font-medium flex items-center gap-2 transition">
-            <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500"></span>
-            <span>4 Pieces (Vertical Columns)</span>
-          </button>
-
-        </div>
-      </div>
-
-      <!-- Explicit Size Specifications -->
-      <div class="border-t border-gray-800 pt-4">
-        <div class="flex items-center justify-between mb-2">
-          <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">2. Piece #1 Target Size</label>
-          <div class="flex bg-gray-800 rounded p-0.5 text-[10px]">
-            <button id="unit-px" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-medium">PX</button>
-            <button id="unit-pct" class="px-2 py-0.5 rounded text-gray-400 font-medium hover:text-white">%</button>
+        <!-- Split Mode Selector -->
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">1. Splitting Mode</label>
+          <div class="grid grid-cols-5 gap-1.5">
+            <button data-value="2-h" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">2<br>Rows</button>
+            <button data-value="2-v" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">2<br>Columns</button>
+            <button data-value="4-grid" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">2×2<br>Grid</button>
+            <button data-value="4-h" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">4<br>Rows</button>
+            <button data-value="4-v" class="mode-btn py-2 rounded-lg border text-[11px] font-medium leading-tight transition">4<br>Columns</button>
           </div>
         </div>
 
-        <!-- Value Input with Nudge buttons -->
-        <div class="space-y-3">
-
-          <!-- Primary Dimension Input -->
-          <div>
-            <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
-              <span id="label-primary-dim">Target Height</span>
-              <span id="badge-primary-val" class="text-indigo-400 font-mono">0 px (50.0%)</span>
+        <!-- Explicit Size Specifications -->
+        <div class="border-t border-gray-800 pt-3">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[11px] font-semibold text-gray-300 uppercase tracking-wider">2. Piece Size</label>
+            <div class="flex bg-gray-800 rounded p-0.5 text-[10px] gap-0.5">
+              <button data-value="px" class="unit-btn px-2.5 py-0.5 rounded border font-medium">PX</button>
+              <button data-value="pct" class="unit-btn px-2.5 py-0.5 rounded border font-medium">%</button>
             </div>
-
-            <div class="flex items-center gap-1.5">
-              <div class="flex-1 relative">
-                <input type="number" id="input-dim-primary" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
-                <span id="unit-indicator" class="absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
-              </div>
-              <!-- Nudge buttons -->
-              <div class="flex gap-1">
-                <button data-nudge="-10" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-10</button>
-                <button data-nudge="-1" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-1</button>
-                <button data-nudge="1" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+1</button>
-                <button data-nudge="10" class="nudge-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+10</button>
-              </div>
-            </div>
-
-            <!-- Slider Range -->
-            <input type="range" id="slider-primary" min="1" max="100" value="50" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer mt-2.5 accent-indigo-500">
           </div>
 
-          <!-- Secondary Dimension Input (Shown only in 2x2 Grid mode) -->
-          <div id="secondary-dim-block" class="hidden pt-2 border-t border-gray-800/60">
+          <!-- Primary Dimension -->
+          <div id="primary-block">
             <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
-              <span>Target Width</span>
-              <span id="badge-secondary-val" class="text-indigo-400 font-mono">0 px (50.0%)</span>
+              <span id="label-primary-dim">Piece 1 height</span>
+              <span id="badge-primary-val" class="text-indigo-400 font-mono"></span>
             </div>
-
             <div class="flex items-center gap-1.5">
               <div class="flex-1 relative">
-                <input type="number" id="input-dim-secondary" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
-                <span class="absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
+                <input type="number" id="input-dim-primary" inputmode="decimal" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
+                <span class="unit-indicator absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
               </div>
               <div class="flex gap-1">
-                <button data-nudge-sec="-10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-10</button>
-                <button data-nudge-sec="-1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">-1</button>
-                <button data-nudge-sec="1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+1</button>
-                <button data-nudge-sec="10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 font-mono">+10</button>
+                <button data-nudge="-10" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-10</button>
+                <button data-nudge="-1" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-1</button>
+                <button data-nudge="1" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+1</button>
+                <button data-nudge="10" class="nudge-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+10</button>
               </div>
             </div>
-
-            <input type="range" id="slider-secondary" min="1" max="100" value="50" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer mt-2.5 accent-indigo-500">
+            <input type="range" id="slider-primary" min="1" max="100" value="50" step="1" class="range mt-1">
           </div>
+
+          <!-- Secondary Dimension (2x2 Grid only) -->
+          <div id="secondary-block" class="hidden pt-2 border-t border-gray-800/60">
+            <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+              <span>Piece 1 width</span>
+              <span id="badge-secondary-val" class="text-indigo-400 font-mono"></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="flex-1 relative">
+                <input type="number" id="input-dim-secondary" inputmode="decimal" min="1" step="1" class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:outline-none rounded-lg px-3 py-1.5 text-sm font-mono text-white">
+                <span class="unit-indicator absolute right-3 top-2 text-xs text-gray-500 pointer-events-none">px</span>
+              </div>
+              <div class="flex gap-1">
+                <button data-nudge="-10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-10</button>
+                <button data-nudge="-1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">-1</button>
+                <button data-nudge="1" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+1</button>
+                <button data-nudge="10" class="nudge-sec-btn px-2 py-1.5 bg-gray-800 rounded text-xs text-gray-300 font-mono">+10</button>
+              </div>
+            </div>
+            <input type="range" id="slider-secondary" min="1" max="100" value="50" step="1" class="range mt-1">
+          </div>
+
+          <p id="hint-4piece" class="hidden text-[10px] text-gray-500 mt-1">Sets piece 1; the rest is shared evenly. Drag any line on the image to adjust it on its own.</p>
 
           <!-- Ratio Presets -->
-          <div class="pt-1">
-            <span class="text-[10px] text-gray-500 block mb-1.5">Quick Presets</span>
-            <div class="flex flex-wrap gap-1.5 text-xs">
-              <button data-preset="0.5" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">1:1 (50/50)</button>
-              <button data-preset="0.3333" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">1:2 (33%)</button>
-              <button data-preset="0.25" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">1:3 (25%)</button>
-              <button data-preset="0.618" class="preset-btn px-2.5 py-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 rounded text-[11px] text-gray-300">&Phi; Golden (61.8%)</button>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- Export Settings -->
-      <div class="border-t border-gray-800 pt-4 mt-auto">
-        <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">3. Output Settings</label>
-
-        <div class="space-y-3">
-          <div class="grid grid-cols-3 gap-2">
-            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer bg-gray-950 p-2 rounded border border-gray-800">
-              <input type="radio" name="format" value="image/png" checked class="text-indigo-600 focus:ring-0">
-              <span>PNG</span>
-            </label>
-            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer bg-gray-950 p-2 rounded border border-gray-800">
-              <input type="radio" name="format" value="image/jpeg" class="text-indigo-600 focus:ring-0">
-              <span>JPG</span>
-            </label>
-            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer bg-gray-950 p-2 rounded border border-gray-800">
-              <input type="radio" name="format" value="image/webp" class="text-indigo-600 focus:ring-0">
-              <span>WEBP</span>
-            </label>
-          </div>
-
-          <div id="jpg-quality-box" class="hidden">
-            <div class="flex justify-between text-xs text-gray-400 mb-1">
-              <span>Compression Quality</span>
-              <span id="quality-val" class="font-mono text-white">90%</span>
-            </div>
-            <input type="range" id="input-quality" min="30" max="100" value="90" class="w-full h-1 bg-gray-800 rounded appearance-none accent-indigo-500">
-          </div>
-
           <div class="pt-2">
-            <button id="btn-export-zip-sidebar" disabled class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-              <span>Export Slices to ZIP</span>
-            </button>
+            <span class="text-[10px] text-gray-500 block mb-1.5">Quick Presets</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button data-preset="0.5" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">1:1 (50%)</button>
+              <button data-preset="0.3333" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">1:2 (33%)</button>
+              <button data-preset="0.25" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">1:3 (25%)</button>
+              <button data-preset="0.618" class="preset-btn px-2.5 py-1 bg-gray-800/80 border border-gray-700/60 rounded text-[11px] text-gray-300">&Phi; Golden (61.8%)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Output Settings -->
+        <div class="border-t border-gray-800 pt-3">
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">3. Output Format</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="image/png" class="split-format-btn py-2 rounded-lg border text-xs font-medium">PNG</button>
+            <button data-value="image/jpeg" class="split-format-btn py-2 rounded-lg border text-xs font-medium">JPG</button>
+            <button data-value="image/webp" class="split-format-btn py-2 rounded-lg border text-xs font-medium">WEBP</button>
+          </div>
+          <div id="split-quality-box" class="hidden mt-2">
+            <div class="flex justify-between text-xs text-gray-400">
+              <span>Quality</span>
+              <span id="split-quality-val" class="font-mono text-white">90%</span>
+            </div>
+            <input type="range" id="split-quality" min="30" max="100" value="90" class="range">
           </div>
         </div>
       </div>
 
+      <!-- Action bar (always visible) -->
+      <div class="flex-shrink-0 p-3 border-t border-gray-800 bg-gray-900">
+        <button id="btn-save-all" disabled class="w-full py-3 bg-indigo-600 disabled:opacity-40 text-white font-semibold rounded-lg shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span>Save All Pieces as Images</span>
+        </button>
+      </div>
     </aside>
-
   </div>
 
-  <!-- Offscreen Processing Canvas -->
-  <canvas id="offscreen-canvas" class="hidden"></canvas>
+  <!-- ===================== JOIN VIEW ===================== -->
+  <div id="view-join" class="hidden flex-1 min-h-0 flex flex-col lg:flex-row">
+
+    <main class="flex-1 min-h-0 flex flex-col bg-gray-950">
+
+      <div class="h-11 flex-shrink-0 border-b border-gray-800/80 bg-gray-900/60 px-3 flex items-center justify-between gap-2 text-xs text-gray-400">
+        <div class="flex items-center gap-1.5">
+          <button id="btn-join-add" class="px-2.5 py-1.5 font-semibold rounded-lg bg-gray-800 border border-gray-700 text-gray-200 flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Add Images</span>
+          </button>
+          <button id="btn-join-clear" class="px-2.5 py-1.5 font-semibold rounded-lg border border-gray-800 text-gray-400">Clear</button>
+        </div>
+        <span id="join-dimensions" class="font-mono text-gray-400 text-[10px] text-right"></span>
+      </div>
+
+      <div id="join-stage" class="flex-1 min-h-0 checkerboard relative flex items-center justify-center overflow-hidden">
+        <div id="join-empty" class="flex flex-col items-center justify-center text-center p-6 m-4 border-2 border-dashed border-gray-800 rounded-2xl bg-gray-900/50 max-w-md cursor-pointer">
+          <div class="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h7v14H4zM13 5h7v14h-7z"></path></svg>
+          </div>
+          <p class="text-sm font-semibold text-white mb-1">Tap to add images to join</p>
+          <p class="text-xs text-gray-400">Pick two or more images; reorder them below</p>
+        </div>
+        <canvas id="join-canvas" class="hidden shadow-2xl ring-1 ring-gray-800"></canvas>
+      </div>
+
+      <section class="h-28 flex-shrink-0 border-t border-gray-800 bg-gray-900/95 flex flex-col">
+        <div class="px-3 py-1 border-b border-gray-800/80 flex items-center justify-between text-[11px] text-gray-400">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-gray-300 uppercase tracking-wider text-[10px]">Images</span>
+            <span id="join-count" class="bg-gray-800 px-1.5 text-indigo-400 rounded font-mono">0</span>
+          </div>
+          <span class="text-gray-500 text-[10px]">Use ◀ ▶ to change the order</span>
+        </div>
+        <div id="join-list" class="flex-1 flex items-center gap-3 px-3 overflow-x-auto custom-scroll"></div>
+      </section>
+    </main>
+
+    <aside class="h-[40%] lg:h-auto flex-shrink-0 lg:w-80 xl:w-96 bg-gray-900 border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col text-sm">
+      <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-4">
+
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">1. Layout</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="v" class="join-dir-btn py-2 rounded-lg border text-xs font-medium">Vertical</button>
+            <button data-value="h" class="join-dir-btn py-2 rounded-lg border text-xs font-medium">Horizontal</button>
+            <button data-value="grid" class="join-dir-btn py-2 rounded-lg border text-xs font-medium">Grid</button>
+          </div>
+          <div id="join-cols-box" class="hidden mt-2 flex items-center gap-2">
+            <span class="text-[11px] text-gray-400 w-16">Columns</span>
+            <div class="flex-1 grid grid-cols-3 gap-1.5">
+              <button data-value="2" class="join-cols-btn py-1.5 rounded-lg border text-xs font-medium">2</button>
+              <button data-value="3" class="join-cols-btn py-1.5 rounded-lg border text-xs font-medium">3</button>
+              <button data-value="4" class="join-cols-btn py-1.5 rounded-lg border text-xs font-medium">4</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-800 pt-3">
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">2. Size Matching</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="largest" class="join-fit-btn py-2 rounded-lg border text-[11px] font-medium leading-tight">Match<br>largest</button>
+            <button data-value="smallest" class="join-fit-btn py-2 rounded-lg border text-[11px] font-medium leading-tight">Match<br>smallest</button>
+            <button data-value="original" class="join-fit-btn py-2 rounded-lg border text-[11px] font-medium leading-tight">Original<br>sizes</button>
+          </div>
+          <p id="join-fit-hint" class="text-[10px] text-gray-500 mt-1"></p>
+        </div>
+
+        <div class="border-t border-gray-800 pt-3">
+          <div class="flex justify-between text-[11px] font-semibold text-gray-300 uppercase tracking-wider">
+            <span>3. Spacing</span>
+            <span id="join-gap-val" class="font-mono text-indigo-400 normal-case">0 px</span>
+          </div>
+          <input type="range" id="join-gap" min="0" max="200" value="0" step="1" class="range">
+          <span class="text-[10px] text-gray-500 block mb-1.5">Background</span>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="transparent" class="join-bg-btn py-2 rounded-lg border text-xs font-medium">None</button>
+            <button data-value="#ffffff" class="join-bg-btn py-2 rounded-lg border text-xs font-medium">White</button>
+            <button data-value="#000000" class="join-bg-btn py-2 rounded-lg border text-xs font-medium">Black</button>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-800 pt-3">
+          <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">4. Output Format</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-value="image/png" class="join-format-btn py-2 rounded-lg border text-xs font-medium">PNG</button>
+            <button data-value="image/jpeg" class="join-format-btn py-2 rounded-lg border text-xs font-medium">JPG</button>
+            <button data-value="image/webp" class="join-format-btn py-2 rounded-lg border text-xs font-medium">WEBP</button>
+          </div>
+          <div id="join-quality-box" class="hidden mt-2">
+            <div class="flex justify-between text-xs text-gray-400">
+              <span>Quality</span>
+              <span id="join-quality-val" class="font-mono text-white">90%</span>
+            </div>
+            <input type="range" id="join-quality" min="30" max="100" value="90" class="range">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-shrink-0 p-3 border-t border-gray-800 bg-gray-900">
+        <button id="btn-join-save" disabled class="w-full py-3 bg-indigo-600 disabled:opacity-40 text-white font-semibold rounded-lg shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span>Save Joined Image</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <div id="toast" class="hidden fixed left-1/2 -translate-x-1/2 bottom-24 z-50 max-w-[90%] bg-gray-800 border border-gray-700 text-gray-100 text-xs px-4 py-2.5 rounded-lg shadow-2xl text-center"></div>
+
+  <input type="file" id="file-input" accept="image/*" class="hidden">
+  <input type="file" id="join-file-input" accept="image/*" multiple class="hidden">
 
   <script>
     (function () {
-      // Core State
-      const state = {
-        image: null,
-        rawWidth: 0,
-        rawHeight: 0,
+      'use strict';
+      const $ = (id) => document.getElementById(id);
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const THUMB_H = 48;
+      const THUMB_MAX_W = 130;
+
+      // ---------- Shared helpers ----------
+
+      const toastEl = $('toast');
+      let toastTimer = 0;
+      function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.remove('hidden');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2800);
+      }
+
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+      function extFor(mime) {
+        return mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+      }
+
+      // Encode a canvas; JPEG has no transparency, so flatten it onto white first
+      function canvasToFile(canvas, format, quality, baseName) {
+        let src = canvas;
+        if (format === 'image/jpeg') {
+          src = document.createElement('canvas');
+          src.width = canvas.width;
+          src.height = canvas.height;
+          const ctx = src.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, src.width, src.height);
+          ctx.drawImage(canvas, 0, 0);
+        }
+        const dataUrl = src.toDataURL(format, quality);
+        const mime = dataUrl.substring(5, dataUrl.indexOf(';'));
+        return { name: `${baseName}.${extFor(mime)}`, dataUrl };
+      }
+
+      // Inside the Android app the native bridge writes the file (WebView ignores
+      // <a download>). Returns 'ok', 'permission', or an error message.
+      function saveFile(file) {
+        if (window.AndroidBridge) {
+          const comma = file.dataUrl.indexOf(',');
+          const mime = file.dataUrl.substring(5, file.dataUrl.indexOf(';'));
+          return String(window.AndroidBridge.saveBase64(file.name, mime, file.dataUrl.slice(comma + 1)));
+        }
+        const a = document.createElement('a');
+        a.href = file.dataUrl;
+        a.download = file.name;
+        a.click();
+        return 'ok';
+      }
+
+      function reportSaves(results, what) {
+        if (results.includes('permission')) {
+          toast('Allow storage access, then tap save again');
+          return;
+        }
+        const failed = results.filter((r) => r !== 'ok');
+        if (failed.length) {
+          toast('Could not save: ' + failed[0]);
+          return;
+        }
+        toast(window.AndroidBridge ? `Saved ${what} to Downloads/ImageSplitter` : `Downloaded ${what}`);
+      }
+
+      function loadImage(src) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+      }
+
+      function loadImageFile(file) {
+        const url = URL.createObjectURL(file);
+        return loadImage(url).then((img) => {
+          URL.revokeObjectURL(url);
+          return img;
+        });
+      }
+
+      // Largest size that fits w×h inside the element, keeping the aspect ratio
+      function fitInto(el, w, h, pad) {
+        const sw = Math.max(1, el.clientWidth - pad * 2);
+        const sh = Math.max(1, el.clientHeight - pad * 2);
+        const s = Math.min(sw / w, sh / h);
+        return { w: Math.max(1, Math.floor(w * s)), h: Math.max(1, Math.floor(h * s)) };
+      }
+
+      function drawThumb(canvas, source, sx, sy, sw, sh) {
+        const scale = Math.min(THUMB_H / sh, THUMB_MAX_W / sw);
+        const cw = Math.max(1, Math.round(sw * scale));
+        const ch = Math.max(1, Math.round(sh * scale));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(cw * dpr);
+        canvas.height = Math.round(ch * dpr);
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        canvas.getContext('2d').drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Segmented button groups
+      const SEG_ON = ['bg-indigo-600', 'border-indigo-500', 'text-white'];
+      const SEG_OFF = ['bg-gray-800/60', 'border-gray-800', 'text-gray-300'];
+      function setSeg(buttons, active) {
+        buttons.forEach((b) => {
+          const on = b === active;
+          b.classList.remove(...(on ? SEG_OFF : SEG_ON));
+          b.classList.add(...(on ? SEG_ON : SEG_OFF));
+        });
+      }
+      function bindSeg(selector, initialValue, onPick) {
+        const buttons = Array.from(document.querySelectorAll(selector));
+        buttons.forEach((b) => b.addEventListener('click', () => {
+          setSeg(buttons, b);
+          onPick(b.dataset.value);
+        }));
+        setSeg(buttons, buttons.find((b) => b.dataset.value === initialValue));
+      }
+
+      // ---------- Tabs ----------
+
+      const tabs = { split: $('tab-split'), join: $('tab-join') };
+      let activeView = 'split';
+      function showView(name) {
+        activeView = name;
+        $('view-split').classList.toggle('hidden', name !== 'split');
+        $('view-join').classList.toggle('hidden', name !== 'join');
+        setSeg([tabs.split, tabs.join], tabs[name]);
+        if (name === 'split') layoutSplit(); else renderJoin();
+      }
+      tabs.split.onclick = () => showView('split');
+      tabs.join.onclick = () => showView('join');
+
+      // ===================== SPLITTER =====================
+
+      const split = {
+        source: null,
         rotation: 0,
         flipH: false,
         flipV: false,
+        W: 0,
+        H: 0,
+        dispW: 0,
+        dispH: 0,
         mode: '2-h', // '2-h', '2-v', '4-grid', '4-h', '4-v'
-        unit: 'px', // 'px' or 'pct'
-        primaryRatio: 0.5,    // 0 to 1
-        secondaryRatio: 0.5,  // for 2x2 grid width
+        cutsY: [], // cut positions in source pixels
+        cutsX: [],
+        unit: 'px',
         format: 'image/png',
-        quality: 0.9,
-        isDragging: false,
-        activeGuide: null // 'h', 'v', 'h1', 'h2', 'h3', etc.
+        quality: 0.9
       };
 
-      // Elements
-      const fileInput = document.getElementById('file-input');
-      const btnBrowseTop = document.getElementById('btn-browse-top');
-      const btnBrowseHero = document.getElementById('btn-browse-hero');
-      const emptyState = document.getElementById('empty-state');
-      const imageWrapper = document.getElementById('image-wrapper');
-      const mainImage = document.getElementById('main-image');
-      const svgOverlay = document.getElementById('svg-overlay');
-      const stageViewport = document.getElementById('stage-viewport');
-      const slicesContainer = document.getElementById('slices-container');
-      const badgePieceCount = document.getElementById('badge-piece-count');
-      const labelDimensions = document.getElementById('label-dimensions');
-      const labelAspect = document.getElementById('label-aspect');
-      const dragTooltip = document.getElementById('drag-tooltip');
-      const offscreenCanvas = document.getElementById('offscreen-canvas');
+      const MODES = {
+        '2-h': { rows: 2, cols: 1, names: ['Top', 'Bottom'] },
+        '2-v': { rows: 1, cols: 2, names: ['Left', 'Right'] },
+        '4-grid': { rows: 2, cols: 2, names: ['TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'] },
+        '4-h': { rows: 4, cols: 1, names: null },
+        '4-v': { rows: 1, cols: 4, names: null }
+      };
 
-      const inputDimPrimary = document.getElementById('input-dim-primary');
-      const sliderPrimary = document.getElementById('slider-primary');
-      const badgePrimaryVal = document.getElementById('badge-primary-val');
-      const labelPrimaryDim = document.getElementById('label-primary-dim');
+      const fileInput = $('file-input');
+      const stage = $('stage');
+      const splitEmpty = $('split-empty');
+      const imageWrapper = $('image-wrapper');
+      const mainCanvas = $('main-canvas');
+      const svgOverlay = $('svg-overlay');
+      const tooltip = $('drag-tooltip');
+      const slicesContainer = $('slices-container');
+      const badgePieceCount = $('badge-piece-count');
+      const labelDimensions = $('label-dimensions');
+      const btnSaveAll = $('btn-save-all');
 
-      const secondaryDimBlock = document.getElementById('secondary-dim-block');
-      const inputDimSecondary = document.getElementById('input-dim-secondary');
-      const sliderSecondary = document.getElementById('slider-secondary');
-      const badgeSecondaryVal = document.getElementById('badge-secondary-val');
+      const primaryCtl = {
+        input: $('input-dim-primary'),
+        slider: $('slider-primary'),
+        badge: $('badge-primary-val'),
+        nudges: document.querySelectorAll('.nudge-btn')
+      };
+      const secondaryCtl = {
+        input: $('input-dim-secondary'),
+        slider: $('slider-secondary'),
+        badge: $('badge-secondary-val'),
+        nudges: document.querySelectorAll('.nudge-sec-btn')
+      };
 
-      const btnExportZipTop = document.getElementById('btn-export-zip-all');
-      const btnExportZipSidebar = document.getElementById('btn-export-zip-sidebar');
-      const unitPx = document.getElementById('unit-px');
-      const unitPct = document.getElementById('unit-pct');
-      const unitIndicator = document.getElementById('unit-indicator');
+      const openPicker = () => { fileInput.value = ''; fileInput.click(); };
+      $('btn-open').onclick = openPicker;
+      splitEmpty.onclick = openPicker;
+      fileInput.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) openSplitFile(e.target.files[0]);
+      };
 
-      // Save a file: inside the Android app, hand it to the native bridge
-      // (WebView ignores <a download>); in a normal browser, use a link.
-      function saveFile(name, mime, base64) {
-        if (window.AndroidBridge) {
-          window.AndroidBridge.saveBase64(name, mime, base64);
-          return;
-        }
-        const a = document.createElement('a');
-        a.href = `data:${mime};base64,${base64}`;
-        a.download = name;
-        a.click();
+      function openSplitFile(file) {
+        loadImageFile(file).then((img) => {
+          if (img) setSplitSource(img); else toast('Could not open that image');
+        });
       }
 
-      // Setup Listeners
-      btnBrowseTop.onclick = () => { fileInput.value = ''; fileInput.click(); };
-      btnBrowseHero.onclick = (e) => { e.stopPropagation(); fileInput.value = ''; fileInput.click(); };
-      emptyState.onclick = () => { fileInput.value = ''; fileInput.click(); };
-      fileInput.onchange = (e) => handleFiles(e.target.files);
-
-      // Clipboard Paste Support
+      // Clipboard paste goes to whichever tool is open
       window.addEventListener('paste', (e) => {
-        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-        for (let item of items) {
-          if (item.kind === 'file' && item.type.startsWith('image/')) {
-            handleFiles([item.getAsFile()]);
-            break;
-          }
+        const items = (e.clipboardData && e.clipboardData.items) || [];
+        const files = [];
+        for (const item of items) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) files.push(item.getAsFile());
         }
+        if (!files.length) return;
+        if (activeView === 'join') addJoinFiles(files); else openSplitFile(files[0]);
       });
 
-      // Drag and Drop files
-      stageViewport.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
-      stageViewport.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.dataTransfer && e.dataTransfer.files.length) {
-          handleFiles(e.dataTransfer.files);
-        }
+      // Drag and drop files
+      [stage, $('join-stage')].forEach((el) => {
+        el.addEventListener('dragover', (e) => { e.preventDefault(); });
+        el.addEventListener('drop', (e) => {
+          e.preventDefault();
+          const files = e.dataTransfer && e.dataTransfer.files;
+          if (!files || !files.length) return;
+          if (el === stage) openSplitFile(files[0]); else addJoinFiles(files);
+        });
       });
 
       // Sample Generator
-      document.getElementById('btn-demo').onclick = () => {
+      $('btn-demo').onclick = () => {
         const c = document.createElement('canvas');
         c.width = 1200;
         c.height = 800;
@@ -417,522 +627,657 @@
         ctx.fillStyle = '#cbd5e1';
         ctx.fillText('1200 × 800 px — High Resolution Test Canvas', 600, 440);
 
-        loadSource(c.toDataURL());
+        loadImage(c.toDataURL()).then((img) => img && setSplitSource(img));
       };
 
-      function handleFiles(files) {
-        if (!files || !files[0]) return;
-        const file = files[0];
-        const reader = new FileReader();
-        reader.onload = (e) => loadSource(e.target.result);
-        reader.readAsDataURL(file);
+      function setSplitSource(img) {
+        split.source = img;
+        split.rotation = 0;
+        split.flipH = false;
+        split.flipV = false;
+        applyOrientation(true);
       }
 
-      function loadSource(src) {
-        const img = new Image();
-        img.onload = () => {
-          state.image = img;
-          state.rotation = 0;
-          state.flipH = false;
-          state.flipV = false;
-          applyOrientedSource();
-        };
-        img.src = src;
-      }
+      // Bake rotation/flips into the full-resolution working canvas
+      function applyOrientation(resetCutsToo) {
+        const img = split.source;
+        if (!img) return;
+        const swap = split.rotation % 180 !== 0;
+        const W = swap ? img.naturalHeight : img.naturalWidth;
+        const H = swap ? img.naturalWidth : img.naturalHeight;
 
-      function applyOrientedSource() {
-        if (!state.image) return;
-
-        // Bake transformations (rotation/flips) into oriented source
-        const rad = (state.rotation * Math.PI) / 180;
-        const isOrthogonal = Math.abs(state.rotation % 180) === 90;
-        const targetW = isOrthogonal ? state.image.naturalHeight : state.image.naturalWidth;
-        const targetH = isOrthogonal ? state.image.naturalWidth : state.image.naturalHeight;
-
-        offscreenCanvas.width = targetW;
-        offscreenCanvas.height = targetH;
-        const ctx = offscreenCanvas.getContext('2d');
-        ctx.clearRect(0, 0, targetW, targetH);
+        mainCanvas.width = W;
+        mainCanvas.height = H;
+        const ctx = mainCanvas.getContext('2d');
         ctx.save();
-        ctx.translate(targetW / 2, targetH / 2);
-        ctx.rotate(rad);
-        ctx.scale(state.flipH ? -1 : 1, state.flipV ? -1 : 1);
-        ctx.drawImage(state.image, -state.image.naturalWidth / 2, -state.image.naturalHeight / 2);
+        ctx.translate(W / 2, H / 2);
+        ctx.rotate((split.rotation * Math.PI) / 180);
+        ctx.scale(split.flipH ? -1 : 1, split.flipV ? -1 : 1);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
         ctx.restore();
 
-        state.rawWidth = targetW;
-        state.rawHeight = targetH;
+        const sizeChanged = W !== split.W || H !== split.H;
+        split.W = W;
+        split.H = H;
+        if (resetCutsToo || sizeChanged) resetCuts();
 
-        mainImage.src = offscreenCanvas.toDataURL();
-        mainImage.onload = () => {
-          emptyState.classList.add('hidden');
-          imageWrapper.classList.remove('hidden');
-          btnExportZipTop.disabled = false;
-          btnExportZipSidebar.disabled = false;
+        splitEmpty.classList.add('hidden');
+        imageWrapper.classList.remove('hidden');
+        btnSaveAll.disabled = false;
+        labelDimensions.textContent = `${W} × ${H} px`;
 
-          labelDimensions.textContent = `${targetW} × ${targetH} px`;
-          const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
-          const divisor = gcd(targetW, targetH);
-          labelAspect.textContent = `(${targetW / divisor}:${targetH / divisor})`;
-
-          syncInputs();
-          renderGuides();
-          generateSlices();
-        };
+        buildGuides();
+        layoutSplit();
+        syncInputs();
+        renderPieces();
       }
 
-      // Orientation Buttons
-      document.getElementById('btn-rot-cw').onclick = () => { state.rotation = (state.rotation + 90) % 360; applyOrientedSource(); };
-      document.getElementById('btn-rot-ccw').onclick = () => { state.rotation = (state.rotation - 90 + 360) % 360; applyOrientedSource(); };
-      document.getElementById('btn-flip-h').onclick = () => { state.flipH = !state.flipH; applyOrientedSource(); };
-      document.getElementById('btn-flip-v').onclick = () => { state.flipV = !state.flipV; applyOrientedSource(); };
+      $('btn-rot-cw').onclick = () => { if (!split.source) return; split.rotation = (split.rotation + 90) % 360; applyOrientation(); };
+      $('btn-rot-ccw').onclick = () => { if (!split.source) return; split.rotation = (split.rotation + 270) % 360; applyOrientation(); };
+      $('btn-flip-h').onclick = () => { if (!split.source) return; split.flipH = !split.flipH; applyOrientation(); };
+      $('btn-flip-v').onclick = () => { if (!split.source) return; split.flipV = !split.flipV; applyOrientation(); };
 
-      // Mode Switcher
-      document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.onclick = () => {
-          document.querySelectorAll('.mode-btn').forEach(b => {
-            b.classList.remove('active', 'border-indigo-500', 'bg-indigo-500/10', 'text-white');
-            b.classList.add('border-gray-800', 'bg-gray-800/60', 'text-gray-300');
-            b.querySelector('span:first-child').className = 'w-2.5 h-2.5 rounded-full bg-transparent border border-gray-500';
-          });
-          btn.classList.add('active', 'border-indigo-500', 'bg-indigo-500/10', 'text-white');
-          btn.classList.remove('border-gray-800', 'bg-gray-800/60', 'text-gray-300');
-          btn.querySelector('span:first-child').className = 'w-2.5 h-2.5 rounded-full bg-indigo-500';
+      // ---------- Cut positions ----------
 
-          state.mode = btn.getAttribute('data-mode');
-          if (state.mode === '4-grid') {
-            secondaryDimBlock.classList.remove('hidden');
-          } else {
-            secondaryDimBlock.classList.add('hidden');
-          }
-          syncInputs();
-          renderGuides();
-          generateSlices();
-        };
-      });
-
-      // Unit Switcher
-      unitPx.onclick = () => {
-        state.unit = 'px';
-        unitPx.className = 'px-2 py-0.5 rounded bg-indigo-600 text-white font-medium';
-        unitPct.className = 'px-2 py-0.5 rounded text-gray-400 font-medium hover:text-white';
-        unitIndicator.textContent = 'px';
-        syncInputs();
-      };
-      unitPct.onclick = () => {
-        state.unit = 'pct';
-        unitPct.className = 'px-2 py-0.5 rounded bg-indigo-600 text-white font-medium';
-        unitPx.className = 'px-2 py-0.5 rounded text-gray-400 font-medium hover:text-white';
-        unitIndicator.textContent = '%';
-        syncInputs();
-      };
-
-      // Presets
-      document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.onclick = () => {
-          const ratio = parseFloat(btn.getAttribute('data-preset'));
-          state.primaryRatio = ratio;
-          state.secondaryRatio = ratio;
-          syncInputs();
-          renderGuides();
-          generateSlices();
-        };
-      });
-
-      // Synchronize Input Fields
-      function syncInputs() {
-        const isHorizontal = state.mode === '2-h' || state.mode === '4-h' || state.mode === '4-grid';
-        labelPrimaryDim.textContent = isHorizontal ? 'Piece 1 Target Height' : 'Piece 1 Target Width';
-
-        const totalDim = isHorizontal ? state.rawHeight : state.rawWidth;
-        const currentPx = Math.round(state.primaryRatio * totalDim);
-        const currentPct = (state.primaryRatio * 100).toFixed(1);
-
-        badgePrimaryVal.textContent = `${currentPx} px (${currentPct}%)`;
-
-        if (state.unit === 'px') {
-          inputDimPrimary.value = currentPx;
-          inputDimPrimary.max = totalDim - 1;
-        } else {
-          inputDimPrimary.value = currentPct;
-          inputDimPrimary.max = 99.9;
-        }
-        sliderPrimary.value = (state.primaryRatio * 100);
-
-        if (state.mode === '4-grid') {
-          const secDim = state.rawWidth;
-          const secPx = Math.round(state.secondaryRatio * secDim);
-          const secPct = (state.secondaryRatio * 100).toFixed(1);
-          badgeSecondaryVal.textContent = `${secPx} px (${secPct}%)`;
-
-          if (state.unit === 'px') {
-            inputDimSecondary.value = secPx;
-            inputDimSecondary.max = secDim - 1;
-          } else {
-            inputDimSecondary.value = secPct;
-            inputDimSecondary.max = 99.9;
-          }
-          sliderSecondary.value = (state.secondaryRatio * 100);
-        }
+      function evenCuts(total, pieces) {
+        const cuts = [];
+        for (let i = 1; i < pieces; i++) cuts.push(Math.round((total * i) / pieces));
+        return cuts;
       }
 
-      // Input Event Listeners
-      inputDimPrimary.addEventListener('input', () => {
-        const val = parseFloat(inputDimPrimary.value) || 0;
-        const isHorizontal = state.mode === '2-h' || state.mode === '4-h' || state.mode === '4-grid';
-        const total = isHorizontal ? state.rawHeight : state.rawWidth;
+      function resetCuts() {
+        const m = MODES[split.mode];
+        split.cutsY = evenCuts(split.H, m.rows);
+        split.cutsX = evenCuts(split.W, m.cols);
+      }
 
-        if (state.unit === 'px') {
-          state.primaryRatio = Math.max(0.01, Math.min(0.99, val / total));
-        } else {
-          state.primaryRatio = Math.max(0.01, Math.min(0.99, val / 100));
+      const primaryAxis = () => (split.mode === '2-v' || split.mode === '4-v' ? 'x' : 'y');
+      const cutsFor = (axis) => (axis === 'x' ? split.cutsX : split.cutsY);
+      const totalFor = (axis) => (axis === 'x' ? split.W : split.H);
+
+      // Move one cut, keeping every piece at least 1px
+      function setCut(axis, i, px) {
+        const cuts = cutsFor(axis);
+        const lo = (i > 0 ? cuts[i - 1] : 0) + 1;
+        const hi = (i < cuts.length - 1 ? cuts[i + 1] : totalFor(axis)) - 1;
+        cuts[i] = Math.max(lo, Math.min(hi, Math.round(px)));
+      }
+
+      // The size controls set piece 1; in 4-piece strips the rest is shared evenly
+      function setPrimary(px) {
+        const axis = primaryAxis();
+        const cuts = cutsFor(axis);
+        if (cuts.length === 1) {
+          setCut(axis, 0, px);
+          return;
         }
-        badgePrimaryVal.textContent = `${Math.round(state.primaryRatio * total)} px (${(state.primaryRatio * 100).toFixed(1)}%)`;
-        sliderPrimary.value = state.primaryRatio * 100;
-        renderGuides();
-        generateSlices();
-      });
+        const total = totalFor(axis);
+        const first = Math.max(1, Math.min(total - cuts.length, Math.round(px)));
+        const rest = total - first;
+        for (let i = 0; i < cuts.length; i++) cuts[i] = first + Math.round((rest * i) / cuts.length);
+      }
 
-      sliderPrimary.addEventListener('input', () => {
-        state.primaryRatio = parseFloat(sliderPrimary.value) / 100;
-        syncInputs();
-        renderGuides();
-        generateSlices();
-      });
+      const setSecondary = (px) => setCut('x', 0, px);
 
-      inputDimSecondary.addEventListener('input', () => {
-        const val = parseFloat(inputDimSecondary.value) || 0;
-        const total = state.rawWidth;
-        if (state.unit === 'px') {
-          state.secondaryRatio = Math.max(0.01, Math.min(0.99, val / total));
-        } else {
-          state.secondaryRatio = Math.max(0.01, Math.min(0.99, val / 100));
-        }
-        badgeSecondaryVal.textContent = `${Math.round(state.secondaryRatio * total)} px (${(state.secondaryRatio * 100).toFixed(1)}%)`;
-        sliderSecondary.value = state.secondaryRatio * 100;
-        renderGuides();
-        generateSlices();
-      });
+      // ---------- Guide lines ----------
 
-      sliderSecondary.addEventListener('input', () => {
-        state.secondaryRatio = parseFloat(sliderSecondary.value) / 100;
-        syncInputs();
-        renderGuides();
-        generateSlices();
-      });
+      let guides = [];
 
-      // Nudging
-      document.querySelectorAll('.nudge-btn').forEach(btn => {
-        btn.onclick = () => {
-          const step = parseInt(btn.getAttribute('data-nudge'));
-          const isHorizontal = state.mode === '2-h' || state.mode === '4-h' || state.mode === '4-grid';
-          const total = isHorizontal ? state.rawHeight : state.rawWidth;
-          let currentPx = Math.round(state.primaryRatio * total);
-          currentPx = Math.max(1, Math.min(total - 1, currentPx + step));
-          state.primaryRatio = currentPx / total;
-          syncInputs();
-          renderGuides();
-          generateSlices();
-        };
-      });
+      function svgEl(tag, attrs) {
+        const el = document.createElementNS(SVG_NS, tag);
+        for (const k in attrs) el.setAttribute(k, attrs[k]);
+        return el;
+      }
 
-      document.querySelectorAll('.nudge-sec-btn').forEach(btn => {
-        btn.onclick = () => {
-          const step = parseInt(btn.getAttribute('data-nudge-sec'));
-          const total = state.rawWidth;
-          let currentPx = Math.round(state.secondaryRatio * total);
-          currentPx = Math.max(1, Math.min(total - 1, currentPx + step));
-          state.secondaryRatio = currentPx / total;
-          syncInputs();
-          renderGuides();
-          generateSlices();
-        };
-      });
-
-      // Format & Quality
-      document.querySelectorAll('input[name="format"]').forEach(radio => {
-        radio.onchange = () => {
-          state.format = radio.value;
-          document.getElementById('jpg-quality-box').classList.toggle('hidden', state.format === 'image/png');
-          generateSlices();
-        };
-      });
-
-      document.getElementById('input-quality').oninput = (e) => {
-        state.quality = parseInt(e.target.value) / 100;
-        document.getElementById('quality-val').textContent = `${e.target.value}%`;
-        generateSlices();
-      };
-
-      // Pointer Event Locked Guide Renderer
-      function renderGuides() {
-        if (!state.image) return;
+      // Built once per image/mode; dragging only moves them, so pointer capture is never lost
+      function buildGuides() {
         svgOverlay.innerHTML = '';
-
-        const rect = mainImage.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-
-        svgOverlay.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
-
-        const createGuide = (id, type, posRatio) => {
-          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-          g.setAttribute('class', 'guide-group cursor-' + (type === 'h' ? 'row-resize' : 'col-resize'));
-          g.setAttribute('data-id', id);
-          g.setAttribute('data-type', type);
-
-          const isH = type === 'h';
-          const pos = isH ? posRatio * rect.height : posRatio * rect.width;
-
-          // 32px Wide Transparent Grab Box
-          const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          hit.setAttribute('x1', isH ? '0' : pos);
-          hit.setAttribute('y1', isH ? pos : '0');
-          hit.setAttribute('x2', isH ? rect.width : pos);
-          hit.setAttribute('y2', isH ? pos : rect.height);
-          hit.setAttribute('stroke', 'transparent');
-          hit.setAttribute('stroke-width', '32');
-          hit.setAttribute('class', 'touch-locked');
-
-          // Visible dashed neon cutting line
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', isH ? '0' : pos);
-          line.setAttribute('y1', isH ? pos : '0');
-          line.setAttribute('x2', isH ? rect.width : pos);
-          line.setAttribute('y2', isH ? pos : rect.height);
-          line.setAttribute('stroke', '#6366f1');
-          line.setAttribute('stroke-width', '2');
-          line.setAttribute('stroke-dasharray', '5 4');
-
-          // Center Handle Pill
-          const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          handle.setAttribute('cx', isH ? rect.width / 2 : pos);
-          handle.setAttribute('cy', isH ? pos : rect.height / 2);
-          handle.setAttribute('r', '7');
-          handle.setAttribute('fill', '#4f46e5');
-          handle.setAttribute('stroke', '#ffffff');
-          handle.setAttribute('stroke-width', '2');
-
-          g.appendChild(hit);
-          g.appendChild(line);
-          g.appendChild(handle);
+        guides = [];
+        ['y', 'x'].forEach((axis) => cutsFor(axis).forEach((_, i) => {
+          const g = svgEl('g', { class: 'guide ' + (axis === 'y' ? 'cursor-row-resize' : 'cursor-col-resize') });
+          const hit = svgEl('line', { stroke: 'transparent', 'stroke-width': 44, 'pointer-events': 'stroke' });
+          const shadow = svgEl('line', { stroke: 'rgba(0,0,0,0.55)', 'stroke-width': 4, 'pointer-events': 'none' });
+          const line = svgEl('line', { stroke: '#818cf8', 'stroke-width': 2, 'stroke-dasharray': '6 4', 'pointer-events': 'none' });
+          const handle = svgEl('circle', { r: 9, fill: '#4f46e5', stroke: '#ffffff', 'stroke-width': 2.5 });
+          g.append(hit, shadow, line, handle);
           svgOverlay.appendChild(g);
-
-          // Pointer capture for completely smooth touch dragging without screen scrolling
-          g.onpointerdown = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            g.setPointerCapture(e.pointerId);
-            state.isDragging = true;
-            state.activeGuide = id;
-
-            dragTooltip.classList.remove('hidden');
-            updateTooltip(e, type, posRatio);
-
-            g.onpointermove = (pe) => {
-              if (!state.isDragging) return;
-              pe.preventDefault();
-              pe.stopPropagation();
-
-              const r = mainImage.getBoundingClientRect();
-              let ratio;
-              if (type === 'h') {
-                ratio = Math.max(0.02, Math.min(0.98, (pe.clientY - r.top) / r.height));
-                state.primaryRatio = ratio;
-              } else {
-                if (state.mode === '4-grid') {
-                  ratio = Math.max(0.02, Math.min(0.98, (pe.clientX - r.left) / r.width));
-                  state.secondaryRatio = ratio;
-                } else {
-                  ratio = Math.max(0.02, Math.min(0.98, (pe.clientX - r.left) / r.width));
-                  state.primaryRatio = ratio;
-                }
-              }
-
-              syncInputs();
-              renderGuides();
-              updateTooltip(pe, type, ratio);
-            };
-
-            const endDrag = (pe) => {
-              pe.preventDefault();
-              pe.stopPropagation();
-              state.isDragging = false;
-              state.activeGuide = null;
-              dragTooltip.classList.add('hidden');
-              g.onpointermove = null;
-              g.onpointerup = null;
-              g.onpointercancel = null;
-              try { g.releasePointerCapture(pe.pointerId); } catch(err){}
-              generateSlices();
-            };
-
-            g.onpointerup = endDrag;
-            g.onpointercancel = endDrag;
-          };
-        };
-
-        // Render appropriate guide lines based on mode
-        if (state.mode === '2-h') {
-          createGuide('g-h', 'h', state.primaryRatio);
-        } else if (state.mode === '2-v') {
-          createGuide('g-v', 'v', state.primaryRatio);
-        } else if (state.mode === '4-grid') {
-          createGuide('g-h', 'h', state.primaryRatio);
-          createGuide('g-v', 'v', state.secondaryRatio);
-        } else if (state.mode === '4-h') {
-          createGuide('g-h1', 'h', state.primaryRatio * 0.5);
-          createGuide('g-h2', 'h', state.primaryRatio);
-          createGuide('g-h3', 'h', state.primaryRatio + (1 - state.primaryRatio) * 0.5);
-        } else if (state.mode === '4-v') {
-          createGuide('g-v1', 'v', state.primaryRatio * 0.5);
-          createGuide('g-v2', 'v', state.primaryRatio);
-          createGuide('g-v3', 'v', state.primaryRatio + (1 - state.primaryRatio) * 0.5);
-        }
+          const guide = { axis, i, g, lines: [hit, shadow, line], handle };
+          guides.push(guide);
+          attachDrag(guide);
+        }));
       }
 
-      function updateTooltip(e, type, ratio) {
-        const wrapRect = imageWrapper.getBoundingClientRect();
-        const x = e.clientX - wrapRect.left;
-        const y = e.clientY - wrapRect.top;
-        dragTooltip.style.left = `${x}px`;
-        dragTooltip.style.top = `${y}px`;
-
-        const isH = type === 'h';
-        const total = isH ? state.rawHeight : state.rawWidth;
-        const px = Math.round(ratio * total);
-        dragTooltip.textContent = `${px} px (${(ratio * 100).toFixed(1)}%)`;
-      }
-
-      // Generate Native Resolution Output Pieces
-      window.renderedSlices = [];
-
-      function generateSlices() {
-        if (!state.image) return;
-
-        const W = state.rawWidth;
-        const H = state.rawHeight;
-        const slices = [];
-
-        if (state.mode === '2-h') {
-          const cutY = Math.round(state.primaryRatio * H);
-          slices.push({ x: 0, y: 0, w: W, h: cutY, name: 'Part_1_Top' });
-          slices.push({ x: 0, y: cutY, w: W, h: H - cutY, name: 'Part_2_Bottom' });
-        } else if (state.mode === '2-v') {
-          const cutX = Math.round(state.primaryRatio * W);
-          slices.push({ x: 0, y: 0, w: cutX, h: H, name: 'Part_1_Left' });
-          slices.push({ x: cutX, y: 0, w: W - cutX, h: H, name: 'Part_2_Right' });
-        } else if (state.mode === '4-grid') {
-          const cutY = Math.round(state.primaryRatio * H);
-          const cutX = Math.round(state.secondaryRatio * W);
-          slices.push({ x: 0, y: 0, w: cutX, h: cutY, name: 'Part_1_TopLeft' });
-          slices.push({ x: cutX, y: 0, w: W - cutX, h: cutY, name: 'Part_2_TopRight' });
-          slices.push({ x: 0, y: cutY, w: cutX, h: H - cutY, name: 'Part_3_BottomLeft' });
-          slices.push({ x: cutX, y: cutY, w: W - cutX, h: H - cutY, name: 'Part_4_BottomRight' });
-        } else if (state.mode === '4-h') {
-          const y1 = Math.round(state.primaryRatio * 0.5 * H);
-          const y2 = Math.round(state.primaryRatio * H);
-          const y3 = Math.round((state.primaryRatio + (1 - state.primaryRatio) * 0.5) * H);
-          slices.push({ x: 0, y: 0, w: W, h: y1, name: 'Part_1' });
-          slices.push({ x: 0, y: y1, w: W, h: y2 - y1, name: 'Part_2' });
-          slices.push({ x: 0, y: y2, w: W, h: y3 - y2, name: 'Part_3' });
-          slices.push({ x: 0, y: y3, w: W, h: H - y3, name: 'Part_4' });
-        } else if (state.mode === '4-v') {
-          const x1 = Math.round(state.primaryRatio * 0.5 * W);
-          const x2 = Math.round(state.primaryRatio * W);
-          const x3 = Math.round((state.primaryRatio + (1 - state.primaryRatio) * 0.5) * W);
-          slices.push({ x: 0, y: 0, w: x1, h: H, name: 'Part_1' });
-          slices.push({ x: x1, y: 0, w: x2 - x1, h: H, name: 'Part_2' });
-          slices.push({ x: x2, y: 0, w: x3 - x2, h: H, name: 'Part_3' });
-          slices.push({ x: x3, y: 0, w: W - x3, h: H, name: 'Part_4' });
-        }
-
-        slicesContainer.innerHTML = '';
-        window.renderedSlices = [];
-        badgePieceCount.textContent = `${slices.length} pieces`;
-
-        slices.forEach((s, idx) => {
-          if (s.w <= 0 || s.h <= 0) return;
-
-          const sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = s.w;
-          sliceCanvas.height = s.h;
-          const sCtx = sliceCanvas.getContext('2d');
-          sCtx.drawImage(offscreenCanvas, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
-
-          const dataUrl = sliceCanvas.toDataURL(state.format, state.quality);
-          const slice = {
-            name: `${s.name}_${s.w}x${s.h}.${state.format === 'image/png' ? 'png' : state.format === 'image/webp' ? 'webp' : 'jpg'}`,
-            dataUrl: dataUrl,
-            width: s.w,
-            height: s.h
-          };
-          window.renderedSlices.push(slice);
-
-          // Render card
-          const card = document.createElement('div');
-          card.className = 'flex-shrink-0 bg-gray-950 border border-gray-800 hover:border-indigo-500 rounded-lg p-2 flex flex-col items-center gap-1.5 transition shadow-lg cursor-pointer group';
-          card.title = 'Click to download this piece';
-
-          const img = document.createElement('img');
-          img.src = dataUrl;
-          img.className = 'h-24 sm:h-28 w-auto object-contain rounded bg-gray-900 border border-gray-800/80';
-
-          const footer = document.createElement('div');
-          footer.className = 'flex items-center justify-between w-full px-1 text-[10px] text-gray-400 font-mono';
-          footer.innerHTML = `<span>#${idx + 1}</span> <span>${s.w}×${s.h}</span>`;
-
-          card.appendChild(img);
-          card.appendChild(footer);
-
-          card.onclick = () => {
-            const mime = dataUrl.substring(5, dataUrl.indexOf(';'));
-            saveFile(slice.name, mime, dataUrl.split(',')[1]);
-          };
-
-          slicesContainer.appendChild(card);
+      function positionGuides() {
+        const w = split.dispW;
+        const h = split.dispH;
+        if (!w) return;
+        // In the grid, keep the two handles apart so both are easy to grab
+        const along = split.mode === '4-grid' ? 0.25 : 0.5;
+        guides.forEach((gd) => {
+          const isY = gd.axis === 'y';
+          const pos = cutsFor(gd.axis)[gd.i] * (isY ? h / split.H : w / split.W);
+          gd.lines.forEach((l) => {
+            l.setAttribute('x1', isY ? 0 : pos);
+            l.setAttribute('y1', isY ? pos : 0);
+            l.setAttribute('x2', isY ? w : pos);
+            l.setAttribute('y2', isY ? pos : h);
+          });
+          gd.handle.setAttribute('cx', isY ? w * along : pos);
+          gd.handle.setAttribute('cy', isY ? pos : h * along);
         });
       }
 
-      // Export All as ZIP
-      const exportZip = async () => {
-        if (!window.renderedSlices || !window.renderedSlices.length) return;
-        const zip = new JSZip();
+      let dragFrame = 0;
+      let pendingDrag = null;
 
-        let manifest = `IMAGE SPLIT SUMMARY\n====================\n`;
-        manifest += `Original Image: ${state.rawWidth} x ${state.rawHeight} px\n`;
-        manifest += `Total Slices: ${window.renderedSlices.length}\n`;
-        manifest += `Format: ${state.format}\n\n`;
+      function attachDrag(gd) {
+        gd.g.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          gd.g.setPointerCapture(e.pointerId);
+          gd.g.classList.add('dragging');
 
-        window.renderedSlices.forEach((slice, i) => {
-          const base64Data = slice.dataUrl.split(',')[1];
-          zip.file(slice.name, base64Data, { base64: true });
-          manifest += `[${i + 1}] ${slice.name} (${slice.width}x${slice.height}px)\n`;
+          // Remember where on the line the finger landed so the line doesn't jump to it
+          const r = mainCanvas.getBoundingClientRect();
+          const isY = gd.axis === 'y';
+          const cut = cutsFor(gd.axis)[gd.i];
+          const linePos = isY ? r.top + (cut / split.H) * r.height : r.left + (cut / split.W) * r.width;
+          const offset = (isY ? e.clientY : e.clientX) - linePos;
+          showTooltip(gd);
+
+          const move = (pe) => {
+            pendingDrag = { gd, offset, x: pe.clientX, y: pe.clientY };
+            if (!dragFrame) dragFrame = requestAnimationFrame(applyDrag);
+          };
+          const end = (pe) => {
+            gd.g.removeEventListener('pointermove', move);
+            gd.g.removeEventListener('pointerup', end);
+            gd.g.removeEventListener('pointercancel', end);
+            try { gd.g.releasePointerCapture(pe.pointerId); } catch (err) {}
+            if (dragFrame) {
+              cancelAnimationFrame(dragFrame);
+              applyDrag();
+            }
+            gd.g.classList.remove('dragging');
+            tooltip.classList.add('hidden');
+            renderPieces();
+          };
+          gd.g.addEventListener('pointermove', move);
+          gd.g.addEventListener('pointerup', end);
+          gd.g.addEventListener('pointercancel', end);
         });
+      }
 
-        zip.file("split_dimensions_info.txt", manifest);
+      // At most one update per animation frame, however fast pointer events arrive
+      function applyDrag() {
+        dragFrame = 0;
+        if (!pendingDrag) return;
+        const { gd, offset, x, y } = pendingDrag;
+        pendingDrag = null;
+        const r = mainCanvas.getBoundingClientRect();
+        const px = gd.axis === 'y'
+          ? ((y - offset - r.top) / r.height) * split.H
+          : ((x - offset - r.left) / r.width) * split.W;
+        setCut(gd.axis, gd.i, px);
+        positionGuides();
+        syncInputs();
+        showTooltip(gd);
+        schedulePieces();
+      }
 
-        const btnText = btnExportZipSidebar.querySelector('span');
-        const originalText = btnText.textContent;
-        btnText.textContent = "Compressing ZIP...";
+      function showTooltip(gd) {
+        const cut = cutsFor(gd.axis)[gd.i];
+        const total = totalFor(gd.axis);
+        tooltip.textContent = `${cut} px (${((cut / total) * 100).toFixed(1)}%)`;
+        const cx = parseFloat(gd.handle.getAttribute('cx'));
+        const cy = parseFloat(gd.handle.getAttribute('cy'));
+        tooltip.style.left = `${cx}px`;
+        // Flip below the handle when there's no room above it
+        tooltip.style.top = `${cy < 48 ? cy + 56 : cy}px`;
+        tooltip.classList.remove('hidden');
+      }
 
+      function layoutSplit() {
+        if (!split.W || activeView !== 'split') return;
+        const s = fitInto(stage, split.W, split.H, 16);
+        mainCanvas.style.width = `${s.w}px`;
+        mainCanvas.style.height = `${s.h}px`;
+        svgOverlay.setAttribute('viewBox', `0 0 ${s.w} ${s.h}`);
+        split.dispW = s.w;
+        split.dispH = s.h;
+        positionGuides();
+      }
+
+      // ---------- Pieces ----------
+
+      function pieceRects() {
+        const xs = [0, ...split.cutsX, split.W];
+        const ys = [0, ...split.cutsY, split.H];
+        const rects = [];
+        for (let r = 0; r < ys.length - 1; r++) {
+          for (let c = 0; c < xs.length - 1; c++) {
+            rects.push({ x: xs[c], y: ys[r], w: xs[c + 1] - xs[c], h: ys[r + 1] - ys[r] });
+          }
+        }
+        return rects;
+      }
+
+      function pieceName(i, p) {
+        const names = MODES[split.mode].names;
+        return `Part_${i + 1}${names ? '_' + names[i] : ''}_${p.w}x${p.h}`;
+      }
+
+      // Thumbnails are cheap scaled draws; full-resolution encoding only happens on save
+      let piecesTimer = 0;
+      function schedulePieces() {
+        if (piecesTimer) return;
+        piecesTimer = setTimeout(() => {
+          piecesTimer = 0;
+          renderPieces();
+        }, 100);
+      }
+
+      function renderPieces() {
+        if (!split.W) return;
+        const rects = pieceRects();
+        badgePieceCount.textContent = String(rects.length);
+
+        if (slicesContainer.firstElementChild && !slicesContainer.firstElementChild.dataset.piece) {
+          slicesContainer.innerHTML = '';
+        }
+        while (slicesContainer.children.length > rects.length) slicesContainer.lastElementChild.remove();
+
+        // Cards are reused so the strip doesn't flicker while a line is dragged
+        rects.forEach((p, i) => {
+          let card = slicesContainer.children[i];
+          if (!card) {
+            card = document.createElement('button');
+            card.dataset.piece = String(i);
+            card.className = 'flex-shrink-0 bg-gray-950 border border-gray-800 active:border-indigo-500 rounded-lg p-1.5 flex flex-col items-center gap-1 shadow-lg';
+            card.innerHTML = '<canvas class="rounded bg-gray-900"></canvas><div class="flex items-center justify-between gap-2 w-full px-0.5 text-[10px] text-gray-400 font-mono"><span></span><span></span></div>';
+            card.onclick = () => savePiece(i);
+            slicesContainer.appendChild(card);
+          }
+          drawThumb(card.querySelector('canvas'), mainCanvas, p.x, p.y, p.w, p.h);
+          const labels = card.querySelectorAll('span');
+          labels[0].textContent = `#${i + 1}`;
+          labels[1].textContent = `${p.w}×${p.h}`;
+        });
+      }
+
+      function pieceFile(i) {
+        const p = pieceRects()[i];
+        const c = document.createElement('canvas');
+        c.width = p.w;
+        c.height = p.h;
+        c.getContext('2d').drawImage(mainCanvas, p.x, p.y, p.w, p.h, 0, 0, p.w, p.h);
+        return canvasToFile(c, split.format, split.quality, pieceName(i, p));
+      }
+
+      function savePiece(i) {
+        const file = pieceFile(i);
+        reportSaves([saveFile(file)], file.name);
+      }
+
+      // Save every piece as its own image file
+      btnSaveAll.onclick = async () => {
+        if (!split.W) return;
+        const count = pieceRects().length;
+        const label = btnSaveAll.querySelector('span');
+        const original = label.textContent;
+        const results = [];
+        btnSaveAll.disabled = true;
         try {
-          const content = await zip.generateAsync({ type: "base64" });
-          saveFile(`split_images_${Date.now()}.zip`, 'application/zip', content);
+          for (let i = 0; i < count; i++) {
+            label.textContent = `Saving ${i + 1} of ${count}…`;
+            await tick(); // let the label repaint between encodes
+            const result = saveFile(pieceFile(i));
+            results.push(result);
+            if (result === 'permission') break;
+          }
         } finally {
-          btnText.textContent = originalText;
+          label.textContent = original;
+          btnSaveAll.disabled = false;
         }
+        reportSaves(results, `${results.length} images`);
       };
 
-      btnExportZipSidebar.onclick = exportZip;
-      btnExportZipTop.onclick = exportZip;
+      // ---------- Controls ----------
 
-      // Handle window resizing
-      window.addEventListener('resize', () => {
-        if (state.image) {
-          renderGuides();
-        }
+      function setSizeControls(ctl, px, total) {
+        const pct = ((px / total) * 100).toFixed(1);
+        // Don't rewrite the field while the user is typing in it
+        if (document.activeElement !== ctl.input) ctl.input.value = split.unit === 'px' ? px : pct;
+        ctl.slider.max = String(total - 1);
+        ctl.slider.value = String(px);
+        ctl.badge.textContent = `${px} px · ${pct}%`;
+      }
+
+      function syncInputs() {
+        if (!split.W) return;
+        const axis = primaryAxis();
+        $('label-primary-dim').textContent = axis === 'y' ? 'Piece 1 height' : 'Piece 1 width';
+        setSizeControls(primaryCtl, cutsFor(axis)[0], totalFor(axis));
+        $('secondary-block').classList.toggle('hidden', split.mode !== '4-grid');
+        $('hint-4piece').classList.toggle('hidden', split.mode !== '4-h' && split.mode !== '4-v');
+        if (split.mode === '4-grid') setSizeControls(secondaryCtl, split.cutsX[0], split.W);
+      }
+
+      function afterEdit() {
+        positionGuides();
+        syncInputs();
+        schedulePieces();
+      }
+
+      function wireSizeControl(ctl, apply, current, total) {
+        ctl.input.addEventListener('input', () => {
+          const v = parseFloat(ctl.input.value);
+          if (!split.W || isNaN(v)) return;
+          apply(split.unit === 'px' ? v : (v / 100) * total());
+          afterEdit();
+        });
+        ctl.input.addEventListener('blur', syncInputs);
+        ctl.slider.addEventListener('input', () => {
+          if (!split.W) return;
+          apply(parseFloat(ctl.slider.value));
+          afterEdit();
+        });
+        ctl.nudges.forEach((b) => b.addEventListener('click', () => {
+          if (!split.W) return;
+          apply(current() + parseInt(b.dataset.nudge, 10));
+          afterEdit();
+        }));
+      }
+
+      wireSizeControl(primaryCtl, setPrimary, () => cutsFor(primaryAxis())[0], () => totalFor(primaryAxis()));
+      wireSizeControl(secondaryCtl, setSecondary, () => split.cutsX[0], () => split.W);
+
+      bindSeg('.mode-btn', split.mode, (mode) => {
+        split.mode = mode;
+        if (!split.W) return;
+        resetCuts();
+        buildGuides();
+        positionGuides();
+        syncInputs();
+        renderPieces();
       });
 
+      bindSeg('.unit-btn', split.unit, (unit) => {
+        split.unit = unit;
+        document.querySelectorAll('.unit-indicator').forEach((el) => { el.textContent = unit === 'px' ? 'px' : '%'; });
+        syncInputs();
+      });
+
+      document.querySelectorAll('.preset-btn').forEach((btn) => {
+        btn.onclick = () => {
+          if (!split.W) return;
+          const ratio = parseFloat(btn.dataset.preset);
+          setPrimary(ratio * totalFor(primaryAxis()));
+          if (split.mode === '4-grid') setSecondary(ratio * split.W);
+          afterEdit();
+        };
+      });
+
+      bindSeg('.split-format-btn', split.format, (format) => {
+        split.format = format;
+        $('split-quality-box').classList.toggle('hidden', format === 'image/png');
+      });
+      $('split-quality').oninput = (e) => {
+        split.quality = parseInt(e.target.value, 10) / 100;
+        $('split-quality-val').textContent = `${e.target.value}%`;
+      };
+
+      // ===================== JOINER =====================
+
+      const join = {
+        items: [], // { img, name }
+        dir: 'v', // 'v', 'h', 'grid'
+        cols: 2,
+        fit: 'largest', // 'largest', 'smallest', 'original'
+        gap: 0,
+        bg: 'transparent',
+        format: 'image/png',
+        quality: 0.9
+      };
+
+      // Keep the saved image within what phone browsers can safely allocate
+      const MAX_SIDE = 16384;
+      const MAX_AREA = 40000000;
+
+      const joinFileInput = $('join-file-input');
+      const joinStage = $('join-stage');
+      const joinCanvas = $('join-canvas');
+      const joinList = $('join-list');
+      const btnJoinSave = $('btn-join-save');
+
+      const openJoinPicker = () => { joinFileInput.value = ''; joinFileInput.click(); };
+      $('btn-join-add').onclick = openJoinPicker;
+      $('join-empty').onclick = openJoinPicker;
+      joinFileInput.onchange = (e) => addJoinFiles(e.target.files);
+      $('btn-join-clear').onclick = () => {
+        join.items = [];
+        renderJoinList();
+        renderJoin();
+      };
+
+      function addJoinFiles(files) {
+        const list = Array.from(files || []);
+        if (!list.length) return;
+        Promise.all(list.map(loadImageFile)).then((imgs) => {
+          imgs.forEach((img, k) => {
+            if (img) join.items.push({ img, name: list[k].name });
+          });
+          if (imgs.some((img) => !img)) toast('Some files could not be opened');
+          renderJoinList();
+          renderJoin();
+        });
+      }
+
+      // Place every image: rows/columns are as large as their biggest member, images centred in their cell
+      function joinLayout() {
+        const items = join.items;
+        if (!items.length) return null;
+        const byWidth = join.dir !== 'h'; // stacks and grids match widths; side-by-side matches heights
+        const matchOf = (img) => (byWidth ? img.naturalWidth : img.naturalHeight);
+        const sizes = items.map((it) => matchOf(it.img));
+        const target = join.fit === 'largest' ? Math.max(...sizes) : join.fit === 'smallest' ? Math.min(...sizes) : 0;
+        const dims = items.map((it) => {
+          const w = it.img.naturalWidth;
+          const h = it.img.naturalHeight;
+          if (!target) return { w, h };
+          const s = target / matchOf(it.img);
+          return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
+        });
+
+        const cols = join.dir === 'v' ? 1 : join.dir === 'h' ? items.length : Math.min(join.cols, items.length);
+        const rows = Math.ceil(items.length / cols);
+        const colW = new Array(cols).fill(0);
+        const rowH = new Array(rows).fill(0);
+        dims.forEach((d, i) => {
+          colW[i % cols] = Math.max(colW[i % cols], d.w);
+          rowH[Math.floor(i / cols)] = Math.max(rowH[Math.floor(i / cols)], d.h);
+        });
+        const colX = [0];
+        const rowY = [0];
+        for (let c = 1; c < cols; c++) colX.push(colX[c - 1] + colW[c - 1] + join.gap);
+        for (let r = 1; r < rows; r++) rowY.push(rowY[r - 1] + rowH[r - 1] + join.gap);
+        const W = colX[cols - 1] + colW[cols - 1];
+        const H = rowY[rows - 1] + rowH[rows - 1];
+
+        const rects = dims.map((d, i) => {
+          const c = i % cols;
+          const r = Math.floor(i / cols);
+          return { x: colX[c] + (colW[c] - d.w) / 2, y: rowY[r] + (rowH[r] - d.h) / 2, w: d.w, h: d.h };
+        });
+        return { W, H, rects };
+      }
+
+      function exportScale(layout) {
+        return Math.min(1, MAX_SIDE / Math.max(layout.W, layout.H), Math.sqrt(MAX_AREA / (layout.W * layout.H)));
+      }
+
+      function drawJoin(canvas, layout, scale) {
+        canvas.width = Math.max(1, Math.round(layout.W * scale));
+        canvas.height = Math.max(1, Math.round(layout.H * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (join.bg !== 'transparent') {
+          ctx.fillStyle = join.bg;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.imageSmoothingQuality = 'high';
+        join.items.forEach((it, i) => {
+          const r = layout.rects[i];
+          ctx.drawImage(it.img, r.x * scale, r.y * scale, r.w * scale, r.h * scale);
+        });
+      }
+
+      // Preview is drawn at screen resolution, coalesced to one draw per frame
+      let joinFrame = 0;
+      function renderJoin() {
+        if (!joinFrame) joinFrame = requestAnimationFrame(drawJoinPreview);
+      }
+
+      function drawJoinPreview() {
+        joinFrame = 0;
+        const layout = joinLayout();
+        $('join-empty').classList.toggle('hidden', !!layout);
+        joinCanvas.classList.toggle('hidden', !layout);
+        btnJoinSave.disabled = !layout;
+        $('join-fit-hint').textContent = join.fit === 'original'
+          ? 'Images keep their own size and are centred.'
+          : `Images are resized to the same ${join.dir === 'h' ? 'height' : 'width'}.`;
+        if (!layout) {
+          $('join-dimensions').textContent = '';
+          return;
+        }
+        const s = exportScale(layout);
+        $('join-dimensions').textContent = `${Math.round(layout.W * s)} × ${Math.round(layout.H * s)} px${s < 1 ? ' (reduced to fit)' : ''}`;
+        if (activeView !== 'join') return;
+        const fit = fitInto(joinStage, layout.W, layout.H, 16);
+        const dpr = window.devicePixelRatio || 1;
+        drawJoin(joinCanvas, layout, Math.min(1, (fit.w * dpr) / layout.W));
+        joinCanvas.style.width = `${fit.w}px`;
+        joinCanvas.style.height = `${fit.h}px`;
+      }
+
+      function renderJoinList() {
+        joinList.innerHTML = '';
+        const n = join.items.length;
+        $('join-count').textContent = String(n);
+        join.items.forEach((it, i) => {
+          const card = document.createElement('div');
+          card.className = 'flex-shrink-0 bg-gray-950 border border-gray-800 rounded-lg p-1.5 flex flex-col items-center gap-1 shadow-lg';
+          const thumb = document.createElement('canvas');
+          thumb.className = 'rounded bg-gray-900';
+          drawThumb(thumb, it.img, 0, 0, it.img.naturalWidth, it.img.naturalHeight);
+          const bar = document.createElement('div');
+          bar.className = 'flex items-center justify-between gap-1 w-full text-[11px] text-gray-300 font-mono';
+          const btn = (label, title, disabled, onClick) => {
+            const b = document.createElement('button');
+            b.textContent = label;
+            b.title = title;
+            b.disabled = disabled;
+            b.className = 'px-1.5 py-0.5 rounded bg-gray-800 disabled:opacity-30';
+            b.onclick = onClick;
+            return b;
+          };
+          const index = document.createElement('span');
+          index.textContent = `#${i + 1}`;
+          bar.append(
+            btn('◀', 'Move earlier', i === 0, () => moveJoinItem(i, -1)),
+            index,
+            btn('▶', 'Move later', i === n - 1, () => moveJoinItem(i, 1)),
+            btn('✕', 'Remove', false, () => removeJoinItem(i))
+          );
+          card.append(thumb, bar);
+          joinList.appendChild(card);
+        });
+
+        const add = document.createElement('button');
+        add.className = 'flex-shrink-0 h-20 w-20 border-2 border-dashed border-gray-700 rounded-lg text-gray-400 text-xs flex flex-col items-center justify-center gap-1';
+        add.innerHTML = '<span class="text-xl leading-none">+</span><span>Add</span>';
+        add.onclick = openJoinPicker;
+        joinList.appendChild(add);
+      }
+
+      function moveJoinItem(i, delta) {
+        const j = i + delta;
+        if (j < 0 || j >= join.items.length) return;
+        [join.items[i], join.items[j]] = [join.items[j], join.items[i]];
+        renderJoinList();
+        renderJoin();
+      }
+
+      function removeJoinItem(i) {
+        join.items.splice(i, 1);
+        renderJoinList();
+        renderJoin();
+      }
+
+      btnJoinSave.onclick = async () => {
+        const layout = joinLayout();
+        if (!layout) return;
+        const label = btnJoinSave.querySelector('span');
+        const original = label.textContent;
+        btnJoinSave.disabled = true;
+        label.textContent = 'Saving…';
+        let result;
+        let name;
+        try {
+          await tick();
+          const c = document.createElement('canvas');
+          drawJoin(c, layout, exportScale(layout));
+          const file = canvasToFile(c, join.format, join.quality, `Joined_${join.items.length}_images_${c.width}x${c.height}`);
+          name = file.name;
+          result = saveFile(file);
+        } catch (err) {
+          result = err.message || String(err);
+        } finally {
+          label.textContent = original;
+          btnJoinSave.disabled = false;
+        }
+        reportSaves([result], name);
+      };
+
+      bindSeg('.join-dir-btn', join.dir, (dir) => {
+        join.dir = dir;
+        $('join-cols-box').classList.toggle('hidden', dir !== 'grid');
+        renderJoin();
+      });
+      bindSeg('.join-cols-btn', String(join.cols), (cols) => {
+        join.cols = parseInt(cols, 10);
+        renderJoin();
+      });
+      bindSeg('.join-fit-btn', join.fit, (fit) => {
+        join.fit = fit;
+        renderJoin();
+      });
+      bindSeg('.join-bg-btn', join.bg, (bg) => {
+        join.bg = bg;
+        renderJoin();
+      });
+      bindSeg('.join-format-btn', join.format, (format) => {
+        join.format = format;
+        $('join-quality-box').classList.toggle('hidden', format === 'image/png');
+      });
+      $('join-gap').oninput = (e) => {
+        join.gap = parseInt(e.target.value, 10);
+        $('join-gap-val').textContent = `${join.gap} px`;
+        renderJoin();
+      };
+      $('join-quality').oninput = (e) => {
+        join.quality = parseInt(e.target.value, 10) / 100;
+        $('join-quality-val').textContent = `${e.target.value}%`;
+      };
+
+      // ---------- Startup ----------
+
+      // Re-fit whenever the screen size changes (rotation, keyboard, split screen)
+      new ResizeObserver(() => layoutSplit()).observe(stage);
+      new ResizeObserver(() => renderJoin()).observe(joinStage);
+
+      renderJoinList();
+      showView('split');
     })();
   </script>
 </body>
